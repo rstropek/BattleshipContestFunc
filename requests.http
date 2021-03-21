@@ -1,0 +1,22 @@
+@host=http://localhost:7071/api
+
+###
+# @name players
+GET {{host}}/players
+
+###
+@firstPlayer={{players.response.body.$.[0].id}}
+GET {{host}}/players/{{firstPlayer}}
+
+###
+POST {{host}}/players
+Content-Type: application/json
+
+{
+    "name": "Pirate2",
+    "webApiUrl": "https://somewhere.com/?asdf=xyz abc"
+}
+
+###
+@firstPlayer={{players.response.body.$.[0].id}}
+DELETE {{host}}/players/{{firstPlayer}}
