@@ -61,10 +61,7 @@ namespace BattleshipContestFunc.Data.Tests
             await table.Table.Add(new(dummyId, dummyName));
             await table.Table.Add(new(Guid.NewGuid(), dummyName));
 
-            var result = await (await table.Table.Get())
-                .Where(item => item.DummyId == dummyId)
-                .AsTableQuery()
-                .ToListAsync();
+            var result = await table.Table.Get(item => item.DummyId == dummyId);
 
             Assert.Single(result);
             Assert.Equal(dummyName, result.First().DummyName);

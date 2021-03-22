@@ -1,15 +1,18 @@
 ﻿using Microsoft.Azure.Cosmos.Table;
+using Microsoft.Azure.Cosmos.Table.Queryable;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 
 namespace BattleshipContestFunc.Data
 {
     public class RepositoryTable<TTable, TPartitionKey, TRowKey> : IRepositoryTable<TTable, TPartitionKey, TRowKey>
-        where TTable: TableEntity, new() 
-        where TPartitionKey: notnull, IEquatable<TPartitionKey>
-        where TRowKey: notnull
+        where TTable : TableEntity, new()
+        where TPartitionKey : notnull, IEquatable<TPartitionKey>
+        where TRowKey : notnull
     {
         private readonly ILogger<RepositoryTable<TTable, TPartitionKey, TRowKey>> logger;
         private readonly IRepository repository;
@@ -25,7 +28,7 @@ namespace BattleshipContestFunc.Data
             this.tableName = tableName;
         }
 
-        public RepositoryTable(ILogger<RepositoryTable<TTable, TPartitionKey, TRowKey>> logger, 
+        public RepositoryTable(ILogger<RepositoryTable<TTable, TPartitionKey, TRowKey>> logger,
             IRepository repository, string tableName, TPartitionKey? partitionKey)
             : this(logger, repository, tableName)
         {
@@ -47,7 +50,7 @@ namespace BattleshipContestFunc.Data
             return result.Result as TTable;
         }
 
-        public async Task<IQueryable<TTable>> Get()
+        public async Task<List<TTable>> Get(Expression<Func<TTable, bool>>? predicate = null)
         {
             if (partitionKey == null)
             {
@@ -55,10 +58,10 @@ namespace BattleshipContestFunc.Data
                     $"Specify partition key in constructor or in call to {nameof(Get)}.");
             }
 
-            return await Get(partitionKey);
+            return await Get(partitionKey, predicate);
         }
 
-        public async Task<IQueryable<TTable>> Get(TPartitionKey partitionKey)
+        public async Task<List<TTable>> Get(TPartitionKey partitionKey, Expression<Func<TTable, bool>>? predicate = null)
         {
             if (this.partitionKey != null && !partitionKey.Equals(this.partitionKey))
             {
@@ -67,7 +70,14 @@ namespace BattleshipContestFunc.Data
             }
 
             var table = await repository.EnsureTableCreated(tableName);
-            return table.CreateQuery<TTable>().Where(c => c.PartitionKey == partitionKey.ToString());
+            var query = table.CreateQuery<TTable>()
+                .Where(c => c.PartitionKey == partitionKey.ToString());
+            if (predicate != null)
+            {
+                query = query.Where(predicate);
+            }
+
+            return await query.AsTableQuery().ToListAsync();
         }
 
         public async Task<TTable?> GetSingle(TRowKey rowKey)

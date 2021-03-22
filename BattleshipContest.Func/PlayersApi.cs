@@ -35,8 +35,7 @@ namespace BattleshipContestFunc
         public async Task<HttpResponseData> Get(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "players")] HttpRequestData req)
         {
-            var players = mapper.Map<List<Player>, List<PlayerDto>>(
-                await (await playerTable.Get()).AsTableQuery().ToListAsync());
+            var players = mapper.Map<List<Player>, List<PlayerDto>>(await playerTable.Get());
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(players, jsonSerializer);

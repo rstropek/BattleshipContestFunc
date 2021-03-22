@@ -1,6 +1,8 @@
 ﻿using Microsoft.Azure.Cosmos.Table;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 
 namespace BattleshipContestFunc.Data
@@ -11,8 +13,8 @@ namespace BattleshipContestFunc.Data
         where TRowKey : notnull
     {
         Task<TTable?> Add(TTable item);
-        Task<IQueryable<TTable>> Get();
-        Task<IQueryable<TTable>> Get(TPartitionKey partitionKey);
+        Task<List<TTable>> Get(Expression<Func<TTable, bool>>? predicate = null);
+        Task<List<TTable>> Get(TPartitionKey partitionKey, Expression<Func<TTable, bool>>? predicate = null);
         Task<TTable?> GetSingle(TRowKey rowKey);
         Task<TTable?> GetSingle(TPartitionKey partitionKey, TRowKey rowKey);
         Task Delete(TRowKey rowKey);
