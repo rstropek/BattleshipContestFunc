@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Azure.Core.Serialization;
 using BattleshipContestFunc.Data;
-using Microsoft.Azure.Cosmos.Table.Queryable;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 
@@ -111,8 +110,9 @@ namespace BattleshipContestFunc
 
             await playerTable.Add(mapper.Map<PlayerDto, Player>(player));
 
-            var response = req.CreateResponse(HttpStatusCode.Created);
+            var response = req.CreateResponse();
             await response.WriteAsJsonAsync(player, jsonSerializer);
+            response.StatusCode = HttpStatusCode.Created;
             return response;
         }
 
@@ -128,7 +128,13 @@ namespace BattleshipContestFunc
                     jsonSerializer);
             }
 
-            await playerTable.Delete(id);
+            var entity = await playerTable.GetSingle(id);
+            if (entity == null)
+            {
+                return req.CreateResponse(HttpStatusCode.NotFound);
+            }
+
+            await playerTable.Delete(entity);
             return req.CreateResponse(HttpStatusCode.NoContent);
         }
     }

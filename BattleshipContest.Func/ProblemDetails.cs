@@ -11,11 +11,12 @@ namespace BattleshipContestFunc
     {
         public static async Task<HttpResponseData> CreateValidationErrorResponse(this HttpRequestData req, string detail, JsonObjectSerializer jsonSerializer)
         {
-            var response = req.CreateResponse(HttpStatusCode.BadRequest);
+            var response = req.CreateResponse();
             await response.WriteAsJsonAsync(new ProblemDetails(
                 "https://battleshipcontest.net/errors/request-validation-error",
                 "Your request parameters did not validate.",
                 detail), jsonSerializer);
+            response.StatusCode = HttpStatusCode.BadRequest;
             return response;
         }
     }

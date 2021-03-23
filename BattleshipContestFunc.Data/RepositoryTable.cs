@@ -50,6 +50,29 @@ namespace BattleshipContestFunc.Data
             return result.Result as TTable;
         }
 
+        public async Task<IQueryable<TTable>> Get()
+        {
+            if (partitionKey == null)
+            {
+                throw new InvalidPartitionKeyException($"Cannot use parameterless version of {nameof(Get)} because no partition key has been set. " +
+                    $"Specify partition key in constructor or in call to {nameof(Get)}.");
+            }
+
+            return await Get(partitionKey);
+        }
+
+        public async Task<IQueryable<TTable>> Get(TPartitionKey partitionKey)
+        {
+            if (this.partitionKey != null && !partitionKey.Equals(this.partitionKey))
+            {
+                logger.LogWarning($"Partition keys do not match. " +
+                    $"Specified partition key is {partitionKeyString}, selected partition key is {partitionKey}.");
+            }
+
+            var table = await repository.EnsureTableCreated(tableName);
+            return table.CreateQuery<TTable>().Where(c => c.PartitionKey == partitionKey.ToString());
+        }
+
         public async Task<List<TTable>> Get(Expression<Func<TTable, bool>>? predicate = null)
         {
             if (partitionKey == null)
@@ -102,9 +125,9 @@ namespace BattleshipContestFunc.Data
             return await GetSingleImpl(partitionKey, rowKey);
         }
 
-        private async Task<TTable?> GetSingleImpl(TPartitionKey partitionKey, TRowKey rowKey)
+        private async Task<TTable?> GetSingleImpl(TPartitionKey partitionKey, TRowKey rowKey, CloudTable? table = null)
         {
-            var table = await repository.EnsureTableCreated(tableName);
+            table ??= await repository.EnsureTableCreated(tableName);
             var op = TableOperation.Retrieve<TTable>(partitionKey.ToString(), rowKey.ToString());
             var result = await table.ExecuteAsync(op);
             return result.Result as TTable;
@@ -130,12 +153,23 @@ namespace BattleshipContestFunc.Data
             }
 
             var table = await repository.EnsureTableCreated(tableName);
-            var entity = await GetSingleImpl(partitionKey, rowKey);
+            var entity = await GetSingleImpl(partitionKey, rowKey, table);
             if (entity != null)
             {
-                var op = TableOperation.Delete(entity);
-                await table.ExecuteAsync(op);
+                await DeleteImpl(table, entity);
             }
+        }
+
+        public async Task Delete(TTable entity)
+        {
+            var table = await repository.EnsureTableCreated(tableName);
+            await DeleteImpl(table, entity);
+        }
+
+        private static async Task DeleteImpl(CloudTable table, TTable entity)
+        {
+            var op = TableOperation.Delete(entity);
+            await table.ExecuteAsync(op);
         }
     }
 }

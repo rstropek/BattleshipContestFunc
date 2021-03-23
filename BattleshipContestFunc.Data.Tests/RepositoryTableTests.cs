@@ -137,6 +137,23 @@ namespace BattleshipContestFunc.Data.Tests
 
         [Fact]
         [Trait("Type", "Integration")]
+        public async Task DeleteEntity()
+        {
+            var dummyId = Guid.NewGuid();
+            const string dummyName = "Dummy";
+
+            var table = new DummyRepositoryTable(tableFixture, true);
+            await table.Table.Add(new(dummyId, dummyName));
+
+            var entity = await table.Table.GetSingle(dummyId);
+            await table.Table.Delete(entity!);
+
+            var result = await table.Table.GetSingle(dummyId);
+            Assert.Null(result);
+        }
+
+        [Fact]
+        [Trait("Type", "Integration")]
         public async Task DeleteLoggingPartitionKey()
         {
             var table = new DummyRepositoryTable(tableFixture, true);

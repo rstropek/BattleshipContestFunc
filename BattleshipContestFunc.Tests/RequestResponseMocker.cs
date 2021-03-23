@@ -27,12 +27,17 @@ namespace BattleshipContestFunc.Tests
 
     public static class RequestResponseMocker
     {
-        public static RequestResponseMock Create()
+        public static RequestResponseMock Create(string? requestBody = null)
         {
             var context = Mock.Of<FunctionContext>();
             var requestMock = new Mock<HttpRequestData>(context);
             var responseMock = new Mock<HttpResponseData>(context);
             requestMock.Setup(r => r.CreateResponse()).Returns(responseMock.Object);
+            if (requestBody != null)
+            {
+                requestMock.SetupGet(r => r.Body).Returns(new MemoryStream(Encoding.UTF8.GetBytes(requestBody)));
+            }
+
             var responseStream = new MemoryStream();
             var headers = new HttpHeadersCollection();
             responseMock.SetupGet(r => r.Body).Returns(responseStream);
