@@ -9,6 +9,7 @@ using System.IO;
 using BattleshipContestFunc.Data;
 using System.Text.Json;
 using Azure.Core.Serialization;
+using NBattleshipCodingContest.Logic;
 
 namespace BattleshipContestFunc
 {
@@ -36,6 +37,8 @@ namespace BattleshipContestFunc
                     {
                         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                     };
+                    jsonOptions.Converters.Add(new BoardContentJsonConverter());
+                    jsonOptions.Converters.Add(new BoardIndexJsonConverter());
                     services.AddSingleton(jsonOptions);
                     services.AddSingleton(_ => new JsonObjectSerializer(jsonOptions));
                 })

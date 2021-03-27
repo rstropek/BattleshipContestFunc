@@ -36,7 +36,7 @@ namespace BattleshipContestFunc
         {
             var players = mapper.Map<List<Player>, List<PlayerDto>>(await playerTable.Get());
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
+            var response = req.CreateResponse();
             await response.WriteAsJsonAsync(players, jsonSerializer);
             return response;
         }
@@ -59,7 +59,7 @@ namespace BattleshipContestFunc
                 return req.CreateResponse(HttpStatusCode.NotFound);
             }
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
+            var response = req.CreateResponse();
             await response.WriteAsJsonAsync(mapper.Map<Player, PlayerDto>(player), jsonSerializer);
             return response;
         }
