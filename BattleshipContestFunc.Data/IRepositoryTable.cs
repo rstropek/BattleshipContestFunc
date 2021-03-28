@@ -1,7 +1,6 @@
 ﻿using Microsoft.Azure.Cosmos.Table;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 
@@ -20,5 +19,6 @@ namespace BattleshipContestFunc.Data
         Task Delete(TRowKey rowKey);
         Task Delete(TPartitionKey partitionKey, TRowKey rowKey);
         Task Delete(TTable entity);
+        Task<TTable?> Replace(TTable item);
     }
 }

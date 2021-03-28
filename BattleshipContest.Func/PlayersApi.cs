@@ -1,18 +1,24 @@
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using Azure.Core.Serialization;
 using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.Net.Http.Headers;
 
 namespace BattleshipContestFunc
 {
-    public record PlayerDto(Guid Id, string Name, string WebApiUrl);
+    public record PlayerDto(Guid Id, string Name, string WebApiUrl, bool Enabled, string? ApiKey = null);
 
     public class PlayersApi
     {
@@ -20,14 +26,16 @@ namespace BattleshipContestFunc
         private readonly IMapper mapper;
         private readonly JsonSerializerOptions jsonOptions;
         private readonly JsonObjectSerializer jsonSerializer;
+        private readonly IAuthorize authorize;
 
         public PlayersApi(IPlayerTable playerTable, IMapper mapper, JsonSerializerOptions jsonOptions,
-            JsonObjectSerializer jsonSerializer)
+            JsonObjectSerializer jsonSerializer, IAuthorize authorize)
         {
             this.playerTable = playerTable;
             this.mapper = mapper;
             this.jsonOptions = jsonOptions;
             this.jsonSerializer = jsonSerializer;
+            this.authorize = authorize;
         }
 
         [Function("Get")]
@@ -68,6 +76,12 @@ namespace BattleshipContestFunc
         public async Task<HttpResponseData> Add(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "players")] HttpRequestData req)
         {
+            var user = await authorize.GetUser(req.Headers);
+            if (user == null)
+            {
+                return req.CreateResponse(HttpStatusCode.Unauthorized);
+            }
+
             using var reader = new StreamReader(req.Body);
             PlayerDto? player;
             try
@@ -121,6 +135,12 @@ namespace BattleshipContestFunc
             [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "players/{idString}")] HttpRequestData req,
             string idString)
         {
+            var user = await authorize.GetUser(req.Headers);
+            if (user == null)
+            {
+                return req.CreateResponse(HttpStatusCode.Unauthorized);
+            }
+
             if (!Guid.TryParseExact(idString, "D", out var id))
             {
                 return await req.CreateValidationErrorResponse(

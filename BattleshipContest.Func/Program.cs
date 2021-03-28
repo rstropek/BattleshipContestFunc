@@ -32,6 +32,7 @@ namespace BattleshipContestFunc
                     services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(logger, false));
                     services.AddSingleton<IRepository, Repository>();
                     services.AddSingleton<IPlayerTable, PlayerTable>();
+                    services.AddSingleton<IAuthorize, Authorize>();
                     services.AddAutoMapper(typeof(MappingProfile));
                     var jsonOptions = new JsonSerializerOptions
                     {

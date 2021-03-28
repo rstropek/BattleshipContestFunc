@@ -1,10 +1,12 @@
 using BattleshipContestFunc.Data;
+using Microsoft.Azure.Functions.Worker.Http;
 using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Net;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
@@ -18,6 +20,32 @@ namespace BattleshipContestFunc.Tests
         public PlayersApi(ApiConfigFixture config)
         {
             this.config = config;
+        }
+
+        private BattleshipContestFunc.PlayersApi CreateApi(Mock<IPlayerTable> playerMock)
+        {
+            var authorizeMock = new Mock<IAuthorize>();
+            authorizeMock.Setup(a => a.GetUser(It.IsAny<HttpHeadersCollection>()))
+                .Returns(Task.FromResult<ClaimsPrincipal?>(null));
+            return CreateApi(playerMock, authorizeMock);
+        }
+
+        private BattleshipContestFunc.PlayersApi CreateApi(Mock<IPlayerTable> playerMock, Mock<IAuthorize> authorize)
+        {
+            return new BattleshipContestFunc.PlayersApi(playerMock.Object, config.Mapper,
+                config.JsonOptions, config.Serializer, authorize.Object);
+        }
+
+        private static Mock<IAuthorize> GetAuthorizeMock(string userSubject)
+        {
+            var principal = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
+            {
+                new("sub", userSubject)
+            }));
+            var authorizeMock = new Mock<IAuthorize>();
+            authorizeMock.Setup(a => a.GetUser(It.IsAny<HttpHeadersCollection>()))
+                .Returns(Task.FromResult<ClaimsPrincipal?>(principal));
+            return authorizeMock;
         }
 
         [Fact]
@@ -42,12 +70,6 @@ namespace BattleshipContestFunc.Tests
             Assert.Equal(new Guid(payload[0].RowKey), resultPayload![0].Id);
             Assert.Equal(payload[0].Name, resultPayload[0].Name);
             Assert.Equal(payload[0].WebApiUrl, resultPayload[0].WebApiUrl);
-        }
-
-        private BattleshipContestFunc.PlayersApi CreateApi(Mock<IPlayerTable> playerMock)
-        {
-            return new BattleshipContestFunc.PlayersApi(playerMock.Object, config.Mapper,
-                config.JsonOptions, config.Serializer);
         }
 
         [Fact]
@@ -103,7 +125,7 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Add(It.IsAny<Player>()));
 
             var mock = RequestResponseMocker.Create("dummy {");
-            await CreateApi(playerMock).Add(mock.RequestMock.Object);
+            await CreateApi(playerMock, GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
 
             playerMock.Verify(p => p.Add(It.IsAny<Player>()), Times.Never);
             Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
@@ -116,11 +138,21 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Add(It.IsAny<Player>()));
 
             var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(
-                new PlayerDto(Guid.Empty, string.Empty, string.Empty), config.JsonOptions));
-            await CreateApi(playerMock).Add(mock.RequestMock.Object);
+                new PlayerDto(Guid.Empty, string.Empty, string.Empty, true), config.JsonOptions));
+            await CreateApi(playerMock, GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
 
             playerMock.Verify(p => p.Add(It.IsAny<Player>()), Times.Never);
             Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task AddChecksAuthorization()
+        {
+            var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(
+                new PlayerDto(Guid.Empty, string.Empty, string.Empty, true), config.JsonOptions));
+            await CreateApi(new Mock<IPlayerTable>()).Add(mock.RequestMock.Object);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
 
         [Fact]
@@ -130,8 +162,8 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Add(It.IsAny<Player>()));
 
             var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(
-                new PlayerDto(Guid.Empty, "Dummy", string.Empty), config.JsonOptions));
-            await CreateApi(playerMock).Add(mock.RequestMock.Object);
+                new PlayerDto(Guid.Empty, "Dummy", string.Empty, true), config.JsonOptions));
+            await CreateApi(playerMock, GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
 
             playerMock.Verify(p => p.Add(It.IsAny<Player>()), Times.Never);
             Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
@@ -144,8 +176,8 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Add(It.IsAny<Player>()));
 
             var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(
-                new PlayerDto(Guid.Empty, "Dummy", "some/api"), config.JsonOptions));
-            await CreateApi(playerMock).Add(mock.RequestMock.Object);
+                new PlayerDto(Guid.Empty, "Dummy", "some/api", true), config.JsonOptions));
+            await CreateApi(playerMock, GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
 
             playerMock.Verify(p => p.Add(It.IsAny<Player>()), Times.Never);
             Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
@@ -158,8 +190,8 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Add(It.IsAny<Player>()));
 
             var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(
-                new PlayerDto(Guid.Empty, "Dummy", "https://someserver.com/api?x=a b"), config.JsonOptions));
-            await CreateApi(playerMock).Add(mock.RequestMock.Object);
+                new PlayerDto(Guid.Empty, "Dummy", "https://someserver.com/api?x=a b", true, "C0d€"), config.JsonOptions));
+            await CreateApi(playerMock, GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
             var resultPayload = JsonSerializer.Deserialize<PlayerDto>(mock.ResponseBodyAsString, config.JsonOptions);
 
             Expression<Func<Player, bool>> playerCheck = p => p.Name == "Dummy" && p.WebApiUrl.Contains("%20");
@@ -171,6 +203,8 @@ namespace BattleshipContestFunc.Tests
             Assert.NotEqual(Guid.Empty, resultPayload!.Id);
             Assert.Equal("Dummy", resultPayload.Name);
             Assert.Contains("%20", resultPayload.WebApiUrl);
+            Assert.True(resultPayload.Enabled);
+            Assert.Equal("C0d€", resultPayload.ApiKey);
         }
 
         [Fact]
@@ -180,7 +214,7 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Delete(It.IsAny<Guid>()));
 
             var mock = RequestResponseMocker.Create();
-            await CreateApi(playerMock).Delete(mock.RequestMock.Object, "dummy");
+            await CreateApi(playerMock, GetAuthorizeMock("foo")).Delete(mock.RequestMock.Object, "dummy");
 
             playerMock.Verify(p => p.Delete(It.IsAny<Guid>()), Times.Never);
             Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
@@ -194,10 +228,20 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Delete(Guid.Empty));
 
             var mock = RequestResponseMocker.Create();
-            await CreateApi(playerMock).Delete(mock.RequestMock.Object, Guid.Empty.ToString());
+            await CreateApi(playerMock, GetAuthorizeMock("foo")).Delete(mock.RequestMock.Object, Guid.Empty.ToString());
 
             playerMock.Verify(p => p.Delete(It.IsAny<Player>()), Times.Once);
             Assert.Equal(HttpStatusCode.NoContent, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task DeleteChecksAuthorization()
+        {
+            var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(
+                new PlayerDto(Guid.Empty, string.Empty, string.Empty, true), config.JsonOptions));
+            await CreateApi(new Mock<IPlayerTable>()).Delete(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
     }
 }

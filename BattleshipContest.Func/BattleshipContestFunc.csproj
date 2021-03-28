@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net5.0</TargetFramework>
         <LangVersion>preview</LangVersion>
@@ -15,6 +15,8 @@
         <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http" Version="3.0.12" />
         <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.0.1" OutputItemType="Analyzer" />
         <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="1.0.0" />
+        <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="6.9.0" />
+        <PackageReference Include="Microsoft.Net.Http.Headers" Version="2.2.8" />
         <PackageReference Include="NBattleshipCodingContest.Logic" Version="0.1.0-alpha" />
         <PackageReference Include="Serilog" Version="2.10.0" />
         <PackageReference Include="Serilog.Extensions.Logging" Version="3.0.1" />

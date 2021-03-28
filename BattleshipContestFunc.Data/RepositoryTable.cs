@@ -50,6 +50,20 @@ namespace BattleshipContestFunc.Data
             return result.Result as TTable;
         }
 
+        public async Task<TTable?> Replace(TTable item)
+        {
+            if (partitionKey != null && item.PartitionKey != partitionKeyString)
+            {
+                throw new InvalidPartitionKeyException($"Partition key of item to add/replace does not match specified partition key of table. " +
+                    $"Specified partition key is {partitionKeyString}, item's partition key is {item.PartitionKey}. They have to be identical.");
+            }
+
+            var table = await repository.EnsureTableCreated(tableName);
+            var op = TableOperation.Replace(item);
+            var result = await table.ExecuteAsync(op);
+            return result.Result as TTable;
+        }
+
         public async Task<IQueryable<TTable>> Get()
         {
             if (partitionKey == null)

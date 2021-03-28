@@ -18,5 +18,11 @@ namespace BattleshipContestFunc.Data
         public string Name { get; set; } = string.Empty;
 
         public string WebApiUrl { get; set; } = string.Empty;
+
+        public bool Enabled { get; set; } = true;
+
+        public string? ApiKey { get; set; }
+
+        public string CreatorSubject { get; set; } = string.Empty;
     }
 }
