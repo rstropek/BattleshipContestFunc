@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Net.Http.Headers;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
@@ -75,6 +76,20 @@ namespace BattleshipContestFunc
             }
 
             return null;
+        }
+
+        public string? GetSubject(ClaimsPrincipal principal)
+            => principal.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+
+        public async Task<string?> TryGetSubject(HttpHeadersCollection headers)
+        {
+            var user = await GetUser(headers);
+            if (user == null)
+            {
+                return null;
+            }
+
+            return GetSubject(user);
         }
 
         private async Task<OpenIdConnectConfiguration> GetConfiguration()

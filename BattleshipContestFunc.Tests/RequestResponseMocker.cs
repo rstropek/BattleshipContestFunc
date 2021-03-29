@@ -2,11 +2,9 @@
 using Microsoft.Azure.Functions.Worker.Http;
 using Moq;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace BattleshipContestFunc.Tests
 {
@@ -27,6 +25,9 @@ namespace BattleshipContestFunc.Tests
 
     public static class RequestResponseMocker
     {
+        public static RequestResponseMock Create<T>(T requestBody, JsonSerializerOptions jsonOptions)
+            => Create(JsonSerializer.Serialize(requestBody, jsonOptions));
+
         public static RequestResponseMock Create(string? requestBody = null)
         {
             var context = Mock.Of<FunctionContext>();

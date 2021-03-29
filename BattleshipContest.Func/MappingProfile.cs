@@ -7,8 +7,13 @@ namespace BattleshipContestFunc
     {
         public MappingProfile()
         {
-            CreateMap<Player, PlayerDto>().ForCtorParam(nameof(PlayerDto.Id), opt => opt.MapFrom(src => src.RowKey));
-            CreateMap<PlayerDto, Player>().ForMember(p => p.RowKey, opt => opt.MapFrom(src => src.Id.ToString()));
+            CreateMap<Player, PlayerAddDto>().ForCtorParam(nameof(PlayerAddDto.Id), opt => opt.MapFrom(src => src.RowKey));
+            CreateMap<Player, PlayerGetDto>().ForCtorParam(nameof(PlayerGetDto.Id), opt => opt.MapFrom(src => src.RowKey));
+            CreateMap<PlayerAddDto, Player>().ForMember(p => p.RowKey, opt => opt.MapFrom(src => src.Id.ToString()));
+
+            CreateMap<User, UserGetDto>().ForCtorParam(nameof(UserGetDto.Subject), opt => opt.MapFrom(src => src.RowKey));
+            CreateMap<UserGetDto, User>().ForCtorParam("subject", opt => opt.MapFrom(_ => string.Empty));
+            CreateMap<UserRegisterDto, User>().ForMember(p => p.RowKey, opt => opt.MapFrom(_ => string.Empty));
         }
     }
 }

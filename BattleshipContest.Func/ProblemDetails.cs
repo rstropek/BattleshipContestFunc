@@ -19,5 +19,16 @@ namespace BattleshipContestFunc
             response.StatusCode = HttpStatusCode.BadRequest;
             return response;
         }
+
+        public static async Task<HttpResponseData> CreateConflictErrorResponse(this HttpRequestData req, string detail, JsonObjectSerializer jsonSerializer)
+        {
+            var response = req.CreateResponse();
+            await response.WriteAsJsonAsync(new ProblemDetails(
+                "https://battleshipcontest.net/errors/conflict",
+                "Your request could not be fulfilled because of a conflict.",
+                detail), jsonSerializer);
+            response.StatusCode = HttpStatusCode.Conflict;
+            return response;
+        }
     }
 }

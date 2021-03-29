@@ -1,24 +1,19 @@
 using System;
 using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using Azure.Core.Serialization;
 using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.Net.Http.Headers;
 
 namespace BattleshipContestFunc
 {
-    public record PlayerDto(Guid Id, string Name, string WebApiUrl, bool Enabled, string? ApiKey = null);
+    public record PlayerGetDto(Guid Id, string Name, string WebApiUrl, string Creator);
+    public record PlayerAddDto(Guid Id, string Name, string WebApiUrl, string? ApiKey = null);
 
     public class PlayersApi
     {
@@ -42,7 +37,15 @@ namespace BattleshipContestFunc
         public async Task<HttpResponseData> Get(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "players")] HttpRequestData req)
         {
-            var players = mapper.Map<List<Player>, List<PlayerDto>>(await playerTable.Get());
+            // Verify authenticated user is present
+            var subject = await authorize.TryGetSubject(req.Headers);
+            if (subject == null)
+            {
+                return req.CreateResponse(HttpStatusCode.Unauthorized);
+            }
+
+            var players = mapper.Map<List<Player>, List<PlayerGetDto>>(
+                await playerTable.Get(p => p.Creator == subject));
 
             var response = req.CreateResponse();
             await response.WriteAsJsonAsync(players, jsonSerializer);
@@ -54,6 +57,13 @@ namespace BattleshipContestFunc
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "players/{idString}")] HttpRequestData req,
             string idString)
         {
+            // Verify authenticated user is present
+            var subject = await authorize.TryGetSubject(req.Headers);
+            if (subject == null)
+            {
+                return req.CreateResponse(HttpStatusCode.Unauthorized);
+            }
+
             if (!Guid.TryParseExact(idString, "D", out var id))
             {
                 return await req.CreateValidationErrorResponse(
@@ -67,8 +77,13 @@ namespace BattleshipContestFunc
                 return req.CreateResponse(HttpStatusCode.NotFound);
             }
 
+            if (player.Creator != subject)
+            {
+                return req.CreateResponse(HttpStatusCode.Forbidden);
+            }
+
             var response = req.CreateResponse();
-            await response.WriteAsJsonAsync(mapper.Map<Player, PlayerDto>(player), jsonSerializer);
+            await response.WriteAsJsonAsync(mapper.Map<Player, PlayerGetDto>(player), jsonSerializer);
             return response;
         }
 
@@ -76,17 +91,19 @@ namespace BattleshipContestFunc
         public async Task<HttpResponseData> Add(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "players")] HttpRequestData req)
         {
-            var user = await authorize.GetUser(req.Headers);
-            if (user == null)
+            // Verify authenticated user is present
+            var subject = await authorize.TryGetSubject(req.Headers);
+            if (subject == null)
             {
                 return req.CreateResponse(HttpStatusCode.Unauthorized);
             }
 
+            // Deserialize and verify DTO
             using var reader = new StreamReader(req.Body);
-            PlayerDto? player;
+            PlayerAddDto? player;
             try
             {
-                player = JsonSerializer.Deserialize<PlayerDto>(await reader.ReadToEndAsync(), jsonOptions);
+                player = JsonSerializer.Deserialize<PlayerAddDto>(await reader.ReadToEndAsync(), jsonOptions);
             }
             catch (JsonException ex)
             {
@@ -117,15 +134,24 @@ namespace BattleshipContestFunc
                 player = player with { WebApiUrl = Uri.EscapeUriString(uri.ToString()) };
             }
 
+            // Set ID to new ID if empty
             if (player.Id == Guid.Empty)
             {
                 player = player with { Id = Guid.NewGuid() };
             }
 
-            await playerTable.Add(mapper.Map<PlayerDto, Player>(player));
+            // Create data object from DTO
+            var playerToAdd = mapper.Map<PlayerAddDto, Player>(player);
+            playerToAdd.Creator = subject;
+
+            // Store player
+            await playerTable.Add(playerToAdd);
+
+            // Convert added player into DTO
+            var playerToReturn = mapper.Map<Player, PlayerGetDto>(playerToAdd);
 
             var response = req.CreateResponse();
-            await response.WriteAsJsonAsync(player, jsonSerializer);
+            await response.WriteAsJsonAsync(playerToReturn, jsonSerializer);
             response.StatusCode = HttpStatusCode.Created;
             return response;
         }
@@ -135,8 +161,9 @@ namespace BattleshipContestFunc
             [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "players/{idString}")] HttpRequestData req,
             string idString)
         {
-            var user = await authorize.GetUser(req.Headers);
-            if (user == null)
+            // Verify authenticated user is present
+            var subject = await authorize.TryGetSubject(req.Headers);
+            if (subject == null)
             {
                 return req.CreateResponse(HttpStatusCode.Unauthorized);
             }
@@ -152,6 +179,11 @@ namespace BattleshipContestFunc
             if (entity == null)
             {
                 return req.CreateResponse(HttpStatusCode.NotFound);
+            }
+
+            if (entity.Creator != subject)
+            {
+                return req.CreateResponse(HttpStatusCode.Forbidden);
             }
 
             await playerTable.Delete(entity);
