@@ -1,35 +1,34 @@
-using System;
-using System.IO;
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AutoMapper;
 using Azure.Core.Serialization;
 using BattleshipContestFunc.Data;
-using EmailValidation;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 
 namespace BattleshipContestFunc
 {
     public record UserGetDto(string Subject, string NickName, string? PublicTwitter, string? PublicUrl);
-    public record UserRegisterDto(string NickName, string Email, string? PublicTwitter, string? PublicUrl);
+    public record UserRegisterDto(
+        [property: Required] string NickName,
+        [property: Required][property: EmailAddress] string Email, 
+        string? PublicTwitter,
+        [property: AbsoluteUri] string? PublicUrl);
 
-    public class UsersApi
+    public class UsersApi : ApiBase
     {
         private readonly IUsersTable usersTable;
         private readonly IMapper mapper;
-        private readonly JsonSerializerOptions jsonOptions;
-        private readonly JsonObjectSerializer jsonSerializer;
         private readonly IAuthorize authorize;
 
         public UsersApi(IUsersTable usersTable, IMapper mapper, JsonSerializerOptions jsonOptions,
             JsonObjectSerializer jsonSerializer, IAuthorize authorize)
+            : base(jsonOptions, jsonSerializer)
         {
             this.usersTable = usersTable;
             this.mapper = mapper;
-            this.jsonOptions = jsonOptions;
-            this.jsonSerializer = jsonSerializer;
             this.authorize = authorize;
         }
 
@@ -39,20 +38,12 @@ namespace BattleshipContestFunc
         {
             // Verify authenticated user is present
             var subject = await authorize.TryGetSubject(req.Headers);
-            if (subject == null)
-            {
-                return req.CreateResponse(HttpStatusCode.Unauthorized);
-            }
+            if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
 
             var user = await usersTable.GetSingle(subject);
-            if (user == null)
-            {
-                return req.CreateResponse(HttpStatusCode.NotFound);
-            }
+            if (user == null) return req.CreateResponse(HttpStatusCode.NotFound);
 
-            var response = req.CreateResponse();
-            await response.WriteAsJsonAsync(mapper.Map<User, UserGetDto>(user), jsonSerializer);
-            return response;
+            return await CreateResponse(req, mapper.Map<User, UserGetDto>(user));
         }
 
         [Function("Register")]
@@ -61,60 +52,17 @@ namespace BattleshipContestFunc
         {
             // Verify authenticated user is present
             var subject = await authorize.TryGetSubject(req.Headers);
-            if (subject == null)
-            {
-                return req.CreateResponse(HttpStatusCode.Unauthorized);
-            }
+            if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
 
             var existingUser = await usersTable.GetSingle(subject);
-            if (existingUser != null)
-            {
-                return await req.CreateConflictErrorResponse($"User already registered.", jsonSerializer);
-            }
+            if (existingUser != null) return await CreateConflictError(req, $"User already registered.");
 
             // Deserialize and verify DTO
-            using var reader = new StreamReader(req.Body);
-            UserRegisterDto? user;
-            try
-            {
-                user = JsonSerializer.Deserialize<UserRegisterDto>(await reader.ReadToEndAsync(), jsonOptions);
-            }
-            catch (JsonException ex)
-            {
-                return await req.CreateValidationErrorResponse($"Could not parse request body ({ex.Message})", jsonSerializer);
-            }
+            var (user, errorResponse) = await DeserializeAndValidateBody<UserRegisterDto>(req);
+            if (user == null) return errorResponse!;
 
-            if (user == null)
-            {
-                return await req.CreateValidationErrorResponse($"Missing user in request body.", jsonSerializer);
-            }
-
-            if (string.IsNullOrWhiteSpace(user.NickName))
-            {
-                return await req.CreateValidationErrorResponse($"Nick name must not be empty.", jsonSerializer);
-            }
-
-            if (string.IsNullOrWhiteSpace(user.Email))
-            {
-                return await req.CreateValidationErrorResponse($"Email must not be empty.", jsonSerializer);
-            }
-
-            if (!EmailValidator.Validate(user.Email))
-            {
-                return await req.CreateValidationErrorResponse($"Email not valid.", jsonSerializer);
-            }
-
-            if (!string.IsNullOrEmpty(user.PublicUrl))
-            {
-                if (!Uri.TryCreate(user.PublicUrl, UriKind.Absolute, out var uri))
-                {
-                    return await req.CreateValidationErrorResponse($"Public profile URL must be a valid absolute URL.", jsonSerializer);
-                }
-                else
-                {
-                    user = user with { PublicUrl = Uri.EscapeUriString(uri.ToString()) };
-                }
-            }
+            var validationError = ValidateModel(user);
+            if (validationError != null) return await CreateValidationError(req, validationError);
 
             // Create data object from DTO
             var userToAdd = mapper.Map<UserRegisterDto, User>(user);
@@ -126,10 +74,7 @@ namespace BattleshipContestFunc
             // Convert added user into DTO
             var userToReturn = mapper.Map<User, UserGetDto>(userToAdd);
 
-            var response = req.CreateResponse();
-            await response.WriteAsJsonAsync(userToReturn, jsonSerializer);
-            response.StatusCode = HttpStatusCode.Created;
-            return response;
+            return await CreateResponse(req, userToReturn, HttpStatusCode.Created);
         }
     }
 }

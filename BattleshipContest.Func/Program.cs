@@ -10,6 +10,9 @@ using BattleshipContestFunc.Data;
 using System.Text.Json;
 using Azure.Core.Serialization;
 using NBattleshipCodingContest.Logic;
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("BattleshipContestFunc.Tests")]
 
 namespace BattleshipContestFunc
 {
@@ -32,6 +35,7 @@ namespace BattleshipContestFunc
                     services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(logger, false));
                     services.AddSingleton<IRepository, Repository>();
                     services.AddSingleton<IPlayerTable, PlayerTable>();
+                    services.AddSingleton<IUsersTable, UsersTable>();
                     services.AddSingleton<IAuthorize, Authorize>();
                     services.AddAutoMapper(typeof(MappingProfile));
                     var jsonOptions = new JsonSerializerOptions

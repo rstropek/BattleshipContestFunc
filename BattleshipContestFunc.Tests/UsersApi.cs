@@ -1,10 +1,7 @@
 using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker.Http;
 using Moq;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
@@ -128,51 +125,12 @@ namespace BattleshipContestFunc.Tests
         private static UserRegisterDto GetEmptyRegisterDto() => new(string.Empty, string.Empty, null, null);
 
         [Fact]
-        public async Task AddEmptyNickName()
+        public async Task AddFailingValidation()
         {
             var userMock = new Mock<IUsersTable>();
             userMock.Setup(p => p.Add(It.IsAny<User>()));
 
             var mock = RequestResponseMocker.Create(GetEmptyRegisterDto(), config.JsonOptions);
-            await CreateApi(userMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
-
-            userMock.Verify(p => p.Add(It.IsAny<User>()), Times.Never);
-            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
-        }
-
-        [Fact]
-        public async Task AddEmptyEmail()
-        {
-            var userMock = new Mock<IUsersTable>();
-            userMock.Setup(p => p.Add(It.IsAny<User>()));
-
-            var mock = RequestResponseMocker.Create(GetEmptyRegisterDto() with { NickName = "foo" }, config.JsonOptions);
-            await CreateApi(userMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
-
-            userMock.Verify(p => p.Add(It.IsAny<User>()), Times.Never);
-            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
-        }
-
-        [Fact]
-        public async Task AddInvalidEmail()
-        {
-            var userMock = new Mock<IUsersTable>();
-            userMock.Setup(p => p.Add(It.IsAny<User>()));
-
-            var mock = RequestResponseMocker.Create(new UserRegisterDto("foo", "foo@", null, null), config.JsonOptions);
-            await CreateApi(userMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
-
-            userMock.Verify(p => p.Add(It.IsAny<User>()), Times.Never);
-            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
-        }
-
-        [Fact]
-        public async Task AddInvalidUrl()
-        {
-            var userMock = new Mock<IUsersTable>();
-            userMock.Setup(p => p.Add(It.IsAny<User>()));
-
-            var mock = RequestResponseMocker.Create(new UserRegisterDto("foo", "foo@bar.com", "@foo", "dummy"), config.JsonOptions);
             await CreateApi(userMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
 
             userMock.Verify(p => p.Add(It.IsAny<User>()), Times.Never);
@@ -186,19 +144,17 @@ namespace BattleshipContestFunc.Tests
             usersMock.Setup(p => p.Add(It.IsAny<User>()));
 
             var mock = RequestResponseMocker.Create(
-                new UserRegisterDto("foo", "foo@bar.com", "@foo", "https://someserver.com/api?x=a b"), config.JsonOptions);
+                new UserRegisterDto("foo", "foo@bar.com", "@foo", "https://someserver.com/api?x=a"), config.JsonOptions);
             await CreateApi(usersMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
             var resultPayload = JsonSerializer.Deserialize<UserGetDto>(mock.ResponseBodyAsString, config.JsonOptions);
 
-            Expression<Func<User, bool>> userCheck = u => u.PublicUrl!.Contains("%20");
-
-            usersMock.Verify(p => p.Add(It.Is(userCheck)), Times.Once);
+            usersMock.Verify(p => p.Add(It.IsAny<User>()), Times.Once);
             Assert.Equal(HttpStatusCode.Created, mock.ResponseMock.Object.StatusCode);
             Assert.StartsWith("application/json", mock.Headers.First(h => h.Key == "Content-Type").Value.First());
             Assert.NotNull(resultPayload);
             Assert.Equal("foo", resultPayload!.Subject);
             Assert.Equal("foo", resultPayload!.NickName);
-            Assert.Contains("%20", resultPayload!.PublicUrl);
+            Assert.Equal("https://someserver.com/api?x=a", resultPayload!.PublicUrl);
             Assert.Equal("@foo", resultPayload!.PublicTwitter);
         }
     }

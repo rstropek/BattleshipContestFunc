@@ -11,15 +11,11 @@ using System.Threading.Tasks;
 
 namespace BattleshipContestFunc
 {
-    public class RandomPlayerApi
+    public class RandomPlayerApi : ApiBase
     {
-        private readonly JsonSerializerOptions jsonOptions;
-        private readonly JsonObjectSerializer jsonSerializer;
-
         public RandomPlayerApi(JsonSerializerOptions jsonOptions, JsonObjectSerializer jsonSerializer)
+            : base(jsonOptions, jsonSerializer)
         {
-            this.jsonOptions = jsonOptions;
-            this.jsonSerializer = jsonSerializer;
         }
 
         [Function("GetReadyRandomPlayer")]
@@ -43,12 +39,12 @@ namespace BattleshipContestFunc
             }
             catch (JsonException ex)
             {
-                return await req.CreateValidationErrorResponse($"Could not parse request body ({ex.Message})", jsonSerializer);
+                return await CreateValidationError(req, $"Could not parse request body ({ex.Message})");
             }
 
             if (boardContent == null)
             {
-                return await req.CreateValidationErrorResponse($"Missing board content in request body.", jsonSerializer);
+                return await CreateValidationError(req, $"Missing board content in request body.");
             }
 
             var rand = new Random();

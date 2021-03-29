@@ -169,7 +169,7 @@ namespace BattleshipContestFunc.Tests
         }
 
         [Fact]
-        public async Task AddEmptyName()
+        public async Task AddFailingValidation()
         {
             var playerMock = new Mock<IPlayerTable>();
             playerMock.Setup(p => p.Add(It.IsAny<Player>()));
@@ -191,53 +191,23 @@ namespace BattleshipContestFunc.Tests
         }
 
         [Fact]
-        public async Task AddEmptyWebApi()
-        {
-            var playerMock = new Mock<IPlayerTable>();
-            playerMock.Setup(p => p.Add(It.IsAny<Player>()));
-
-            var mock = RequestResponseMocker.Create(
-                new PlayerAddDto(Guid.Empty, "Dummy", string.Empty), config.JsonOptions);
-            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
-
-            playerMock.Verify(p => p.Add(It.IsAny<Player>()), Times.Never);
-            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
-        }
-
-        [Fact]
-        public async Task AddInvalidWebApi()
-        {
-            var playerMock = new Mock<IPlayerTable>();
-            playerMock.Setup(p => p.Add(It.IsAny<Player>()));
-
-            var mock = RequestResponseMocker.Create(
-                new PlayerAddDto(Guid.Empty, "Dummy", "some/api"), config.JsonOptions);
-            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
-
-            playerMock.Verify(p => p.Add(It.IsAny<Player>()), Times.Never);
-            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
-        }
-
-        [Fact]
         public async Task Add()
         {
             var playerMock = new Mock<IPlayerTable>();
             playerMock.Setup(p => p.Add(It.IsAny<Player>()));
 
             var mock = RequestResponseMocker.Create(
-                new PlayerAddDto(Guid.Empty, "Dummy", "https://someserver.com/api?x=a b", "C0d€"), config.JsonOptions);
+                new PlayerAddDto(Guid.Empty, "Dummy", "https://someserver.com/api?x=a", "C0d€"), config.JsonOptions);
             await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
             var resultPayload = JsonSerializer.Deserialize<PlayerGetDto>(mock.ResponseBodyAsString, config.JsonOptions);
 
-            Expression<Func<Player, bool>> playerCheck = p => p.Name == "Dummy" && p.WebApiUrl.Contains("%20");
-
-            playerMock.Verify(p => p.Add(It.Is(playerCheck)), Times.Once);
+            playerMock.Verify(p => p.Add(It.IsAny<Player>()), Times.Once);
             Assert.Equal(HttpStatusCode.Created, mock.ResponseMock.Object.StatusCode);
             Assert.StartsWith("application/json", mock.Headers.First(h => h.Key == "Content-Type").Value.First());
             Assert.NotNull(resultPayload);
             Assert.NotEqual(Guid.Empty, resultPayload!.Id);
             Assert.Equal("Dummy", resultPayload.Name);
-            Assert.Contains("%20", resultPayload.WebApiUrl);
+            Assert.Equal("https://someserver.com/api?x=a", resultPayload.WebApiUrl);
             Assert.Equal("foo", resultPayload.Creator);
         }
 
@@ -291,6 +261,117 @@ namespace BattleshipContestFunc.Tests
 
             playerMock.Verify(p => p.Delete(It.IsAny<Player>()), Times.Never);
             Assert.Equal(HttpStatusCode.Forbidden, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task PatchChecksAuthorization()
+        {
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(new Mock<IPlayerTable>()).Patch(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task PatchInvalidBody()
+        {
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.Replace(It.IsAny<Player>()));
+
+            var mock = RequestResponseMocker.Create("dummy {");
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
+
+            playerMock.Verify(p => p.Replace(It.IsAny<Player>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task PatchFailingValidation()
+        {
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.Add(It.IsAny<Player>()));
+
+            var mock = RequestResponseMocker.Create(GetEmptyAddDto() with { WebApiUrl = "a/b" }, config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
+
+            playerMock.Verify(p => p.Add(It.IsAny<Player>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task PatchInvalidId()
+        {
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.Delete(It.IsAny<Guid>()));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Delete(mock.RequestMock.Object, "dummy");
+
+            playerMock.Verify(p => p.Delete(It.IsAny<Guid>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task PatchForeignPlayer()
+        {
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(Guid.Empty)).Returns(Task.FromResult<Player?>(
+                new Player(Guid.Empty) { Creator = "foo1" }));
+            playerMock.Setup(p => p.Replace(It.IsAny<Player>()));
+
+            var mock = RequestResponseMocker.Create(new PlayerPatchDto("asdf", "https://asdf.com"), config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo2")).Patch(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            playerMock.Verify(p => p.Replace(It.IsAny<Player>()), Times.Never);
+            Assert.Equal(HttpStatusCode.Forbidden, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task NoUpdateIfNothingChanged()
+        {
+            var data = new Player(Guid.Empty) { Name = "asdf", Creator = "foo", WebApiUrl = "https://dummy.com" };
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(Guid.Empty)).Returns(Task.FromResult<Player?>(data));
+            playerMock.Setup(p => p.Replace(It.IsAny<Player>()));
+
+            var mock = RequestResponseMocker.Create(new PlayerPatchDto("asdf", "https://dummy.com"), config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            playerMock.Verify(p => p.Replace(It.IsAny<Player>()), Times.Never);
+            Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task UpdateEmptyName()
+        {
+            var data = new Player(Guid.Empty) { Name = "asdf", Creator = "foo", WebApiUrl = "https://dummy.com" };
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(Guid.Empty)).Returns(Task.FromResult<Player?>(data));
+            playerMock.Setup(p => p.Replace(It.IsAny<Player>()));
+
+            var mock = RequestResponseMocker.Create(new PlayerPatchDto(Name: ""), config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            playerMock.Verify(p => p.Replace(It.IsAny<Player>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task Update()
+        {
+            var data = new Player(Guid.Empty) { Name = "a", Creator = "foo", WebApiUrl = "https://dummy.com" };
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(Guid.Empty)).Returns(Task.FromResult<Player?>(data));
+            playerMock.Setup(p => p.Replace(It.IsAny<Player>()));
+
+            var mock = RequestResponseMocker.Create(new PlayerPatchDto("ab", "https://new.com", "key"), config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            Expression<Func<Player, bool>> verify = p => p.Name == "ab" && p.WebApiUrl == "https://new.com"
+                && p.ApiKey == "key";
+
+            playerMock.Verify(p => p.Replace(It.Is(verify)), Times.Once);
+            Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
         }
     }
 }
