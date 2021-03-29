@@ -157,5 +157,20 @@ namespace BattleshipContestFunc.Tests
             Assert.Equal("https://someserver.com/api?x=a", resultPayload!.PublicUrl);
             Assert.Equal("@foo", resultPayload!.PublicTwitter);
         }
+
+        [Fact]
+        public async Task AddEmptyProfileUrl()
+        {
+            var usersMock = new Mock<IUsersTable>();
+            usersMock.Setup(p => p.Add(It.IsAny<User>()));
+
+            var mock = RequestResponseMocker.Create(
+                new UserRegisterDto("foo", "foo@bar.com", "@foo", ""), config.JsonOptions);
+            await CreateApi(usersMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
+            var resultPayload = JsonSerializer.Deserialize<UserGetDto>(mock.ResponseBodyAsString, config.JsonOptions);
+
+            usersMock.Verify(p => p.Add(It.IsAny<User>()), Times.Once);
+            Assert.Equal(HttpStatusCode.Created, mock.ResponseMock.Object.StatusCode);
+        }
     }
 }

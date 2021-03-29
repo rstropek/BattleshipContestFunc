@@ -61,6 +61,8 @@ namespace BattleshipContestFunc
             var (user, errorResponse) = await DeserializeAndValidateBody<UserRegisterDto>(req);
             if (user == null) return errorResponse!;
 
+            if (user.PublicUrl == string.Empty) user = user with { PublicUrl = null };
+
             var validationError = ValidateModel(user);
             if (validationError != null) return await CreateValidationError(req, validationError);
 
