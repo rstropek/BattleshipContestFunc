@@ -1,7 +1,9 @@
 using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker.Http;
 using Moq;
+using System;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
@@ -171,6 +173,116 @@ namespace BattleshipContestFunc.Tests
 
             usersMock.Verify(p => p.Add(It.IsAny<User>()), Times.Once);
             Assert.Equal(HttpStatusCode.Created, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task PatchChecksAuthorization()
+        {
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(new Mock<IUsersTable>()).Patch(mock.RequestMock.Object);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task PatchInvalidBody()
+        {
+            var playerMock = new Mock<IUsersTable>();
+            playerMock.Setup(p => p.Replace(It.IsAny<User>()));
+
+            var mock = RequestResponseMocker.Create("dummy {");
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object);
+
+            playerMock.Verify(p => p.Replace(It.IsAny<User>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+        private static UserRegisterDto GetEmptyAddDto() => new(string.Empty, string.Empty, string.Empty, string.Empty);
+
+        [Fact]
+        public async Task PatchFailingValidation()
+        {
+            var playerMock = new Mock<IUsersTable>();
+            playerMock.Setup(p => p.Replace(It.IsAny<User>()));
+
+            var mock = RequestResponseMocker.Create(GetEmptyAddDto() with { NickName = "asdf" }, config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object);
+
+            playerMock.Verify(p => p.Replace(It.IsAny<User>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        private static User GetFilledUser() => new("foo")
+        { 
+            NickName = "asdf", 
+            Email = "foo@bar.com", 
+            PublicTwitter = "@foo", 
+            PublicUrl = "https://asdf.com/asdf" 
+        };
+
+        [Fact]
+        public async Task NoUpdateIfNothingChanged()
+        {
+            var data = GetFilledUser();
+            var playerMock = new Mock<IUsersTable>();
+            playerMock.Setup(p => p.GetSingle("foo")).Returns(Task.FromResult<User?>(data));
+            playerMock.Setup(p => p.Replace(It.IsAny<User>()));
+
+            var mock = RequestResponseMocker.Create(new UserPatchDto(data.NickName, data.Email, data.PublicTwitter, data.PublicUrl), config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object);
+
+            playerMock.Verify(p => p.Replace(It.IsAny<User>()), Times.Never);
+            Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task UpdateEmptyName()
+        {
+            var data = GetFilledUser();
+            var playerMock = new Mock<IUsersTable>();
+            playerMock.Setup(p => p.GetSingle("foo")).Returns(Task.FromResult<User?>(data));
+            playerMock.Setup(p => p.Replace(It.IsAny<User>()));
+
+            var mock = RequestResponseMocker.Create(new UserPatchDto(NickName: ""), config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object);
+
+            playerMock.Verify(p => p.Replace(It.IsAny<User>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task Update()
+        {
+            var data = GetFilledUser();
+            var playerMock = new Mock<IUsersTable>();
+            playerMock.Setup(p => p.GetSingle("foo")).Returns(Task.FromResult<User?>(data));
+            playerMock.Setup(p => p.Replace(It.IsAny<User>()));
+
+            var mock = RequestResponseMocker.Create(new UserPatchDto("as", "foo2@bar2.com", "@bar", "https://foo.bar.at/asdf"), config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object);
+
+            Expression<Func<User, bool>> verify = p => p.NickName == "as" && p.Email == "foo2@bar2.com"
+                && p.PublicTwitter == "@bar" && p.PublicUrl == "https://foo.bar.at/asdf";
+
+            playerMock.Verify(p => p.Replace(It.Is(verify)), Times.Once);
+            Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task UpdateSingleField()
+        {
+            var data = GetFilledUser();
+            var playerMock = new Mock<IUsersTable>();
+            playerMock.Setup(p => p.GetSingle("foo")).Returns(Task.FromResult<User?>(data));
+            playerMock.Setup(p => p.Replace(It.IsAny<User>()));
+
+            var mock = RequestResponseMocker.Create(new UserPatchDto(null, "foo2@bar2.com"), config.JsonOptions);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Patch(mock.RequestMock.Object);
+
+            Expression<Func<User, bool>> verify = p => p.NickName == data.NickName && p.Email == "foo2@bar2.com"
+                && p.PublicTwitter == data.PublicTwitter && p.PublicUrl == data.PublicUrl;
+
+            playerMock.Verify(p => p.Replace(It.Is(verify)), Times.Once);
+            Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
         }
     }
 }

@@ -106,7 +106,7 @@ namespace BattleshipContestFunc
             return await CreateResponse(req, playerToReturn, HttpStatusCode.Created);
         }
 
-        [Function("Patch")]
+        [Function("PatchPlayer")]
         public async Task<HttpResponseData> Patch(
             [HttpTrigger(AuthorizationLevel.Anonymous, "patch", Route = "players/{idString}")] HttpRequestData req,
             string idString)
