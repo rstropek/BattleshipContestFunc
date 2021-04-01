@@ -36,7 +36,7 @@ jobs:
         run: dotnet build --no-restore --configuration $CONFIG
 
       - name: 🧪 Test (no integration tests yet)
-        run: dotnet test --filter TraitName!=TraitValue --no-build --no-restore --configuration $CONFIG
+        run: dotnet test --filter Type!=Integration --no-build --no-restore --configuration $CONFIG
 
       - name: 🔐 Sign in
         working-directory: BattleshipContest.Func
