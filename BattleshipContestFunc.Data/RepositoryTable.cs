@@ -52,7 +52,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<TTable?> Replace(TTable item)
         {
-            if (partitionKey != null && item.PartitionKey != partitionKeyString)
+            if (partitionKey != null && !partitionKey.Equals(default) && item.PartitionKey != partitionKeyString)
             {
                 throw new InvalidPartitionKeyException($"Partition key of item to add/replace does not match specified partition key of table. " +
                     $"Specified partition key is {partitionKeyString}, item's partition key is {item.PartitionKey}. They have to be identical.");
@@ -77,7 +77,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<IQueryable<TTable>> Get(TPartitionKey partitionKey)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, selected partition key is {partitionKey}.");
@@ -100,7 +100,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<List<TTable>> Get(TPartitionKey partitionKey, Expression<Func<TTable, bool>>? predicate = null)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, selected partition key is {partitionKey}.");
@@ -130,7 +130,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<TTable?> GetSingle(TPartitionKey partitionKey, TRowKey rowKey)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, selected partition key is {partitionKey}.");
@@ -160,7 +160,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task Delete(TPartitionKey partitionKey, TRowKey rowKey)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, partition key for deletion is {partitionKey}.");
@@ -171,6 +171,35 @@ namespace BattleshipContestFunc.Data
             if (entity != null)
             {
                 await DeleteImpl(table, entity);
+            }
+        }
+
+        public async Task DeletePartition(TPartitionKey partitionKey)
+        {
+            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
+            {
+                logger.LogWarning($"Partition keys do not match. " +
+                    $"Specified partition key is {partitionKeyString}, partition key for deletion is {partitionKey}.");
+            }
+
+            var table = await repository.EnsureTableCreated(tableName);
+            var entities = await Get(partitionKey);
+            var op = new TableBatchOperation();
+            var operationCount = 0;
+            foreach(var entity in entities)
+            {
+                op.Add(TableOperation.Delete(entity));
+                operationCount++;
+                if (operationCount == 100)
+                {
+                    await table.ExecuteBatchAsync(op);
+                    operationCount = 0;
+                }
+            }
+
+            if (operationCount > 0)
+            {
+                await table.ExecuteBatchAsync(op);
             }
         }
 

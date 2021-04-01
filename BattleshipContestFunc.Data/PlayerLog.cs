@@ -40,5 +40,9 @@ namespace BattleshipContestFunc.Data
         public string LogMessage { get; set; } = string.Empty;
 
         public string WebApiUrl { get; set; } = string.Empty;
+
+        public DateTime? Started { get; set; }
+
+        public DateTime? Completed { get; set; }
     }
 }

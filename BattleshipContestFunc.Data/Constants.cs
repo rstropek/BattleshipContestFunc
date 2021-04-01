@@ -11,5 +11,7 @@
         public const string PlayerLogTable = "PlayerLog";
         public const string PlayerResultTable = "PlayerResults";
         public const string PlayerResultPartitionKey = "Results";
+        public const string GameResultTable = "GameResults";
+        public const string GameResultPartitionKey = "Results";
     }
 }

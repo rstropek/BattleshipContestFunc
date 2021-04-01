@@ -18,6 +18,7 @@ namespace BattleshipContestFunc.Data
         Task<TTable?> GetSingle(TPartitionKey partitionKey, TRowKey rowKey);
         Task Delete(TRowKey rowKey);
         Task Delete(TPartitionKey partitionKey, TRowKey rowKey);
+        Task DeletePartition(TPartitionKey partitionKey);
         Task Delete(TTable entity);
         Task<TTable?> Replace(TTable item);
     }

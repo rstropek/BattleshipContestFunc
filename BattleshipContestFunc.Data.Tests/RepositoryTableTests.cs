@@ -159,5 +159,26 @@ namespace BattleshipContestFunc.Data.Tests
             await table.Table.Delete("SomeDummyPartitionKey", Guid.NewGuid());
             table.LoggerMock.VerifyLogWasCalled(LogLevel.Warning, Times.Once());
         }
+
+        [Fact]
+        [Trait("Type", "Integration")]
+        public async Task DeletePartition()
+        {
+            const string dummyName = "Dummy";
+
+            var table = new DummyRepositoryTable(tableFixture, false);
+            await table.Table.Add(new("P1", Guid.NewGuid(), dummyName));
+            await table.Table.Add(new("P1", Guid.NewGuid(), dummyName));
+            await table.Table.Add(new("P2", Guid.NewGuid(), dummyName));
+
+            await table.Table.DeletePartition("P1");
+
+            var result = await table.Table.Get("P1");
+            Assert.Empty(result);
+
+            result = await table.Table.Get("P2");
+            Assert.NotNull(result);
+            Assert.Single(result);
+        }
     }
 }

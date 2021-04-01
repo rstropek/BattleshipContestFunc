@@ -10,12 +10,17 @@ namespace BattleshipContestFunc.Data
         public DummyTable(string dummyName)
             : this(Guid.NewGuid(), dummyName) { }
 
-        public DummyTable(Guid dummyId, string dummyName)
+        public DummyTable(string partitionKey, Guid dummyId, string dummyName)
         {
-            PartitionKey = nameof(DummyTable);
+            PartitionKey = partitionKey;
             DummyId = dummyId;
             RowKey = dummyId.ToString();
             DummyName = dummyName;
+        }
+
+        public DummyTable(Guid dummyId, string dummyName)
+            : this(nameof(DummyTable), dummyId, dummyName)
+        {
         }
 
         public Guid DummyId { get; set; } = Guid.Empty;

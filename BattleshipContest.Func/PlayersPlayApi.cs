@@ -39,7 +39,9 @@ namespace BattleshipContestFunc
             return req.CreateResponse(HttpStatusCode.OK);
         }
 
-        public record MeasurePlayerRequestMessage(Guid PlayerId);
+        public record MeasurePlayerRequestMessage(Guid PlayerId, int CompletedGameCount = 0, int NumberOfShots = 0,
+            string? WebApiUrl = null, string? ApiKey = null, string? PlayerName = null,
+            string? TournamentStartedLogRowKey = null);
 
         [Function("PlayGame")]
         public async Task<PlayGameOutput> Game(
@@ -68,8 +70,11 @@ namespace BattleshipContestFunc
             public HttpResponseData? HttpResponse { get; set; }
         }
 
+        private const int NumberOfGames = 25;
+
         [Function("AsyncPlayGame")]
-        public async Task AsyncGame(
+        [ServiceBusOutput("MeasurePlayerTopic", EntityType.Topic)]
+        public async Task<string?> AsyncGame(
             [ServiceBusTrigger("MeasurePlayerTopic", "MeasurePlayerSubscription")] string sbMessage,
             FunctionContext context)
         {
@@ -77,7 +82,7 @@ namespace BattleshipContestFunc
             if (string.IsNullOrEmpty(sbMessage))
             {
                 logger.LogCritical("Received empty message");
-                return;
+                return null;
             }
 
             MeasurePlayerRequestMessage? message;
@@ -88,92 +93,153 @@ namespace BattleshipContestFunc
             catch (JsonException ex)
             {
                 logger.LogCritical($"Cloud not parse message {sbMessage}: {ex.Message}");
-                return;
+                return null;
             }
 
             if (message == null)
             {
                 logger.LogCritical($"Message {sbMessage} empty after deserialization");
-                return;
+                return null;
             }
 
-            var player = await playerTable.GetSingle(message.PlayerId);
-            if (player == null)
+            if (message.CompletedGameCount > 0)
             {
-                logger.LogCritical($"Player {message.PlayerId} not found");
-                return;
-            }
+                if (string.IsNullOrEmpty(message.WebApiUrl))
+                {
+                    logger.LogCritical($"Web API URL must not be empty");
+                    return null;
+                }
 
-            player.TournamentInProgressSince = DateTime.UtcNow;
-            await playerTable.Replace(player);
+                if (string.IsNullOrEmpty(message.PlayerName))
+                {
+                    logger.LogCritical($"Player name must not be empty");
+                    return null;
+                }
 
-            if (string.IsNullOrEmpty(player.WebApiUrl))
-            {
-                logger.LogCritical($"Message {sbMessage} does not contain a web api url");
-                return;
+                if (string.IsNullOrEmpty(message.TournamentStartedLogRowKey))
+                {
+                    logger.LogCritical($"Row key of log entry for tournament start must not be empty");
+                    return null;
+                }
             }
+            else
+            {
+                var player = await playerTable.GetSingle(message.PlayerId);
+                if (player == null)
+                {
+                    logger.LogCritical($"Player {message.PlayerId} not found");
+                    return null;
+                }
 
-            if (string.IsNullOrEmpty(player.Name))
-            {
-                logger.LogCritical($"Message {sbMessage} does not contain a player name");
-                return;
-            }
+                if (string.IsNullOrEmpty(player.WebApiUrl))
+                {
+                    logger.LogCritical($"Message {sbMessage} does not contain a web api url");
+                    return null;
+                }
 
-            try
-            {
-                await playerLogTable.Add(new(message.PlayerId, player.WebApiUrl, $"Getting player ready for tournament"));
-                await playerClient.GetReady(player.WebApiUrl, player.ApiKey);
-            }
-            catch (Exception ex)
-            {
-                var errorMessage = ex.GetFullDescription();
-                await playerLogTable.AddException(message.PlayerId, player.WebApiUrl, errorMessage);
-                return;
-            }
+                if (string.IsNullOrEmpty(player.Name))
+                {
+                    logger.LogCritical($"Message {sbMessage} does not contain a player name");
+                    return null;
+                }
 
-            const int numberOfGames = 25;
-            const int numberOfShotsForException = 200;
-            var totalNumberOfShots = 0;
-            var numberOfErrors = 0;
-            const int maxNumberOfErrors = 5;
-            await playerLogTable.Add(new(message.PlayerId, player.WebApiUrl, $"Starting tournament"));
-            for (var i = 0; i < numberOfGames; i++)
-            {
                 try
                 {
-                    totalNumberOfShots += await playerClient.PlayGame(player.WebApiUrl, player.ApiKey);
+                    await playerLogTable.Add(new(message.PlayerId, player.WebApiUrl, $"Getting player ready for tournament"));
+                    await playerClient.GetReady(player.WebApiUrl, player.ApiKey);
                 }
                 catch (Exception ex)
                 {
                     var errorMessage = ex.GetFullDescription();
                     await playerLogTable.AddException(message.PlayerId, player.WebApiUrl, errorMessage);
+                    return null;
+                }
+
+                var startedEntry = await playerLogTable.Add(
+                    new(message.PlayerId, player.WebApiUrl, $"Tournament") { Started = DateTime.UtcNow });
+                player.TournamentInProgressSince = DateTime.UtcNow;
+                await playerTable.Replace(player);
+
+                message = message with
+                {
+                    WebApiUrl = player.WebApiUrl,
+                    ApiKey = player.ApiKey,
+                    PlayerName = player.Name,
+                    TournamentStartedLogRowKey = startedEntry!.RowKey
+                };
+            }
+
+            var numberOfErrors = 0;
+            var numberOfShots = 0;
+            const int maxNumberOfErrors = 3;
+            var gameLogEntry = await playerLogTable.Add(
+                new(message.PlayerId, message.WebApiUrl, $"Game {message.CompletedGameCount + 1}") { Started = DateTime.UtcNow });
+            while (true)
+            { 
+
+                try
+                {
+                    numberOfShots = await playerClient.PlayGame(message.WebApiUrl, message.ApiKey);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    var errorMessage = ex.GetFullDescription();
+                    await playerLogTable.AddException(message.PlayerId, message.WebApiUrl, errorMessage);
 
                     numberOfErrors++;
                     if (numberOfErrors > maxNumberOfErrors)
                     {
-                        await playerLogTable.Add(new(message.PlayerId, "Too many errors, stopping tournament with max number of shots."));
-                        return;
+                        await playerLogTable.Add(new(message.PlayerId, "Too many errors, stopping tournament"));
+                        return null;
                     }
-
-                    totalNumberOfShots += numberOfShotsForException;
                 }
             }
 
-            var avgShots = ((double)totalNumberOfShots) / numberOfGames;
-            await playerResultTable.Add(new(message.PlayerId)
-            {
-                Name = player.Name,
-                AvgNumberOfShots = avgShots,
-                LastMeasurement = DateTime.UtcNow
-            });
-            await playerLogTable.Add(new(message.PlayerId, player.WebApiUrl, $"Finished tournament with total # of shots {totalNumberOfShots}, avg # of shots {avgShots}"));
+            gameLogEntry!.Completed = DateTime.UtcNow;
+            await playerLogTable.Replace(gameLogEntry);
 
-            player = await playerTable.GetSingle(message.PlayerId);
-            if (player != null)
+            message = message with
             {
-                player.TournamentInProgressSince = null;
-                await playerTable.Replace(player);
+                CompletedGameCount = message.CompletedGameCount + 1,
+                NumberOfShots = message.NumberOfShots + numberOfShots
+            };
+
+            if (message.CompletedGameCount == NumberOfGames)
+            {
+                var avgShots = ((double)message.NumberOfShots) / NumberOfGames;
+                var playerResultEntry = await playerResultTable.GetSingle(message.PlayerId);
+                if (playerResultEntry == null)
+                {
+                    playerResultEntry = new(message.PlayerId)
+                    {
+                        Name = message.PlayerName
+                    };
+                }
+
+                playerResultEntry.LastMeasurement = DateTime.UtcNow;
+                playerResultEntry.AvgNumberOfShots = avgShots;
+                await playerResultTable.Replace(playerResultEntry);
+
+                var logEntry = await playerLogTable.GetSingle(message.PlayerId, message.TournamentStartedLogRowKey);
+                if (logEntry != null)
+                {
+                    logEntry.LogMessage = $"Finished tournament with total # of shots {message.NumberOfShots}, avg # of shots {avgShots}";
+                    logEntry.Completed = DateTime.UtcNow;
+                    await playerLogTable.Replace(logEntry);
+                }
+
+                var player = await playerTable.GetSingle(message.PlayerId);
+                if (player != null)
+                {
+                    player.TournamentInProgressSince = null;
+                    await playerTable.Replace(player);
+                }
+
+                return null;
             }
+
+            return JsonSerializer.Serialize(message, jsonOptions);
         }
     }
 }
