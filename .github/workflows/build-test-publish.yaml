@@ -15,6 +15,7 @@ jobs:
       DEPLOYMENT_PRINCIPAL_SECRET: ${{ secrets.DEPLOYMENT_PRINCIPAL_SECRET }}
       SUBSCRIPTION: ${{ secrets.SUBSCRIPTION }}
       FUNCTION_NAME: ${{ secrets.FUNCTION_NAME }}
+      AAD_TENANT: ${{ secrets.AAD_TENANT }}
     steps:
       - uses: actions/checkout@v2
         name: 🚚 Checkout
@@ -41,7 +42,7 @@ jobs:
       - name: 🔐 Sign in
         working-directory: BattleshipContest.Func
         run: |
-          az login -u $DEPLOYMENT_PRINCIPAL_NAME -p DEPLOYMENT_PRINCIPAL_SECRET
+          az login --service-principal -u $DEPLOYMENT_PRINCIPAL_NAME -p $DEPLOYMENT_PRINCIPAL_SECRET --tenant $AAD_TENANT
           az account set --subscription $SUBSCRIPTION
 
       - name: 📦 Deploy
