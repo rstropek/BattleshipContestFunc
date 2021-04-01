@@ -28,18 +28,10 @@ namespace BattleshipContestFunc
         public async Task<HttpResponseData> GetShot(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/faulty/getShot")] HttpRequestData req)
         {
-            var rand = new Random();
-            if (rand.NextDouble() < 1.10d)
-            {
-                var errorResponse = req.CreateResponse();
-                await errorResponse.WriteAsJsonAsync("This is a random error\nfrom faulty player.");
-                errorResponse.StatusCode = HttpStatusCode.InternalServerError;
-                return errorResponse;
-            }
-
-            var response = req.CreateResponse();
-            await response.WriteAsJsonAsync("A1", jsonSerializer);
-            return response;
+            var errorResponse = req.CreateResponse();
+            await errorResponse.WriteAsJsonAsync("This is a random error\nfrom faulty player.");
+            errorResponse.StatusCode = HttpStatusCode.InternalServerError;
+            return errorResponse;
         }
     }
 }

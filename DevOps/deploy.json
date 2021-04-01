@@ -118,6 +118,10 @@
                         {
                             "name": "netFrameworkVersion",
                             "value": "v5.0"
+                        },
+                        {
+                            "name": "AzureFunctionsJobHost__logging__logLevel",
+                            "value": "Error"
                         }
                     ],
                     "cors": {

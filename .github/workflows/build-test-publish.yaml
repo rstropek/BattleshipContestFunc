@@ -1,0 +1,44 @@
+name: Build, test, and publish
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CONFIG: Release
+      DEPLOYMENT_PRINCIPAL_NAME: ${{ secrets.DEPLOYMENT_PRINCIPAL_NAME }}
+      DEPLOYMENT_PRINCIPAL_SECRET: ${{ secrets.DEPLOYMENT_PRINCIPAL_SECRET }}
+      SUBSCRIPTION: ${{ secrets.SUBSCRIPTION }}
+      FUNCTION_NAME: ${{ secrets.FUNCTION_NAME }}
+    steps:
+      - uses: actions/checkout@v2
+        name: 🚚 Checkout
+
+      - uses: actions/setup-dotnet@v1
+        name: 🔧 Setup .NET
+        with:
+          dotnet-version: '5.0.x'
+
+      - name: 👩‍🏭 Restore
+        run: dotnet restore
+
+      - name: 👩‍🏭 Build
+        run: dotnet build --no-restore --configuration $CONFIG
+
+      - name: 🧪 Test
+        run: dotnet test --no-build --no-restore --configuration $CONFIG
+
+      - name: 🔐 Sign in
+        working-directory: BattleshipContest.Func
+        run: |
+          az login -u $DEPLOYMENT_PRINCIPAL_NAME -p DEPLOYMENT_PRINCIPAL_SECRET
+          az account set --subscription $SUBSCRIPTION
+
+      - name: 📦 Deploy
+        working-directory: BattleshipContest.Func
+        run: func azure functionapp publish $FUNCTION_NAME

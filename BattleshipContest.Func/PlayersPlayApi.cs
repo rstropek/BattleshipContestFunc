@@ -141,9 +141,8 @@ namespace BattleshipContestFunc
                     numberOfErrors++;
                     if (numberOfErrors > maxNumberOfErrors)
                     {
-                        await playerLogTable.Add(new(message.PlayerId, "Too many errors, stopping tournament with max number of shots"));
-                        totalNumberOfShots = numberOfShotsForException * numberOfGames;
-                        break;
+                        await playerLogTable.Add(new(message.PlayerId, "Too many errors, stopping tournament with max number of shots."));
+                        return;
                     }
 
                     totalNumberOfShots += numberOfShotsForException;
