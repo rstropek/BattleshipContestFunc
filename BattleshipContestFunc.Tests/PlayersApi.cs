@@ -30,10 +30,19 @@ namespace BattleshipContestFunc.Tests
             return CreateApi(playerMock, authorizeMock);
         }
 
-        private BattleshipContestFunc.PlayersApi CreateApi(Mock<IPlayerTable> playerMock, Mock<IAuthorize> authorize)
+        private BattleshipContestFunc.PlayersApi CreateApi(Mock<IPlayerTable> playerMock,
+            Mock<IAuthorize> authorize, Mock<IPlayerResultTable>? resultsMock = null)
         {
             return new BattleshipContestFunc.PlayersApi(playerMock.Object, config.Mapper,
-                config.JsonOptions, config.Serializer, authorize.Object);
+                config.JsonOptions, config.Serializer, authorize.Object, Mock.Of<IPlayerClient>(),
+                Mock.Of<IPlayerLogTable>(), resultsMock?.Object ?? Mock.Of<IPlayerResultTable>());
+        }
+
+        public static Mock<IPlayerResultTable> CreateEmptyResultTableMock()
+        {
+            var mock = new Mock<IPlayerResultTable>();
+            mock.Setup(t => t.Get(null)).Returns(Task.FromResult(new List<PlayerResult>()));
+            return mock;
         }
 
         [Fact]
@@ -48,7 +57,7 @@ namespace BattleshipContestFunc.Tests
                 .Returns(Task.FromResult(payload));
 
             var mock = RequestResponseMocker.Create();
-            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Get(mock.RequestMock.Object);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"), CreateEmptyResultTableMock()).Get(mock.RequestMock.Object);
             var resultPayload = JsonSerializer.Deserialize<List<PlayerGetDto>>(mock.ResponseBodyAsString, config.JsonOptions);
 
             playerMock.Verify(p => p.Get(It.IsAny<Expression<Func<Player, bool>>>()), Times.Once);
@@ -62,14 +71,36 @@ namespace BattleshipContestFunc.Tests
             Assert.Equal(payload[0].Creator, resultPayload[0].Creator);
         }
 
+        [Fact]
+        public async Task GetWithApiKey()
+        {
+            var payload = new List<Player>
+            {
+                new(Guid.Empty) { Name = "Dummy", WebApiUrl = "https://somewhere.com/api", Creator = "foo", ApiKey = "dummy" },
+                new(Guid.Empty) { Name = "Dummy", WebApiUrl = "https://somewhere.com/api", Creator = "foo" }
+            };
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.Get(It.IsAny<Expression<Func<Player, bool>>>()))
+                .Returns(Task.FromResult(payload));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"), CreateEmptyResultTableMock()).Get(mock.RequestMock.Object);
+            var resultPayload = JsonSerializer.Deserialize<List<PlayerGetDto>>(mock.ResponseBodyAsString, config.JsonOptions);
+
+            Assert.True(resultPayload![0].HasApiKey);
+            Assert.False(resultPayload![1].HasApiKey);
+        }
+
         private static PlayerAddDto GetEmptyAddDto() => new(Guid.Empty, string.Empty, string.Empty);
 
         [Fact]
         public async Task GetChecksAuthorization()
         {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var mock = RequestResponseMocker.Create(GetEmptyAddDto(), config.JsonOptions);
-            await CreateApi(new Mock<IPlayerTable>()).Get(mock.RequestMock.Object);
+            await CreateApi(new Mock<IPlayerTable>(), authMock).Get(mock.RequestMock.Object);
 
+            authMock.Verify(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()), Times.Once);
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
 
@@ -102,12 +133,14 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task GetSingleChecksAuthorization()
         {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var playerMock = new Mock<IPlayerTable>();
             playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>()));
 
             var mock = RequestResponseMocker.Create();
-            await CreateApi(playerMock).GetSingle(mock.RequestMock.Object, Guid.Empty.ToString());
+            await CreateApi(playerMock, authMock).GetSingle(mock.RequestMock.Object, Guid.Empty.ToString());
 
+            authMock.Verify(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()), Times.Once);
             playerMock.Verify(p => p.GetSingle(It.IsAny<Guid>()), Times.Never);
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
@@ -184,9 +217,11 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task AddChecksAuthorization()
         {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var mock = RequestResponseMocker.Create(GetEmptyAddDto(), config.JsonOptions);
-            await CreateApi(new Mock<IPlayerTable>()).Add(mock.RequestMock.Object);
+            await CreateApi(new Mock<IPlayerTable>(), authMock).Add(mock.RequestMock.Object);
 
+            authMock.Verify(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()), Times.Once);
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
 
@@ -242,9 +277,11 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task DeleteChecksAuthorization()
         {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var mock = RequestResponseMocker.Create();
-            await CreateApi(new Mock<IPlayerTable>()).Delete(mock.RequestMock.Object, Guid.Empty.ToString());
+            await CreateApi(new Mock<IPlayerTable>(), authMock).Delete(mock.RequestMock.Object, Guid.Empty.ToString());
 
+            authMock.Verify(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()), Times.Once);
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
 
@@ -266,9 +303,11 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task PatchChecksAuthorization()
         {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var mock = RequestResponseMocker.Create();
-            await CreateApi(new Mock<IPlayerTable>()).Patch(mock.RequestMock.Object, Guid.Empty.ToString());
+            await CreateApi(new Mock<IPlayerTable>(), authMock).Patch(mock.RequestMock.Object, Guid.Empty.ToString());
 
+            authMock.Verify(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()), Times.Once);
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
 

@@ -38,7 +38,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<TTable?> Add(TTable item)
         {
-            if (partitionKey != null && item.PartitionKey != partitionKeyString)
+            if (partitionKey != null && !partitionKey.Equals(default) && item.PartitionKey != partitionKeyString)
             {
                 throw new InvalidPartitionKeyException($"Partition key of item to add/replace does not match specified partition key of table. " +
                     $"Specified partition key is {partitionKeyString}, item's partition key is {item.PartitionKey}. They have to be identical.");

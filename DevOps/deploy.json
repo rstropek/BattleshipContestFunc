@@ -1,0 +1,176 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "environment": {
+            "type": "string",
+            "allowedValues": [
+                "dev",
+                "prod"
+            ],
+            "defaultValue": "dev"
+        },
+        "baseName": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "serviceBusApiVersion": "2017-04-01",
+        "serviceBusNamespaceName": "[concat('sb-', parameters('baseName'), '-', parameters('environment'), '-', uniqueString(resourceGroup().name))]",
+        "storageName": "[concat('st', parameters('baseName'), parameters('environment'), uniqueString(resourceGroup().name))]",
+        "functionAppName": "[concat('func-', parameters('baseName'), '-', parameters('environment'), '-', uniqueString(resourceGroup().name))]",
+        "hostingPlanName": "[concat('app-', parameters('baseName'), '-', parameters('environment'), '-', uniqueString(resourceGroup().name))]",
+        "appInsightsName": "[concat('ai-', parameters('baseName'), '-', parameters('environment'), '-', uniqueString(resourceGroup().name))]",
+        "serviceBusTopicName": "MeasurePlayerTopic",
+        "serviceBusSubscriptionName": "MeasurePlayerSubscription"
+    },
+    "functions": [],
+    "resources": [
+        {
+            "name": "[variables('storageName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "tags": {},
+            "location": "[resourceGroup().location]",
+            "kind": "StorageV2",
+            "properties": {
+                "allowBlobPublicAccess": false,
+                "minimumTlsVersion": "TLS1_2"
+            },
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            }
+        },
+        {
+            "type": "microsoft.insights/components",
+            "kind": "other",
+            "name": "[variables('appInsightsName')]",
+            "apiVersion": "2014-04-01",
+            "location": "[resourceGroup().location]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "ApplicationId": "[variables('appInsightsName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2018-02-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "computeMode": "Dynamic"
+            }
+        },
+        {
+            "name": "[variables('functionAppName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]",
+                "[resourceId('microsoft.insights/components', variables('appInsightsName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "ContestStoreConnectionString",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(variables('storageName'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "AzureWebJobsDashboard",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(variables('storageName'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(variables('storageName'),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2019-06-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('functionAppName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~3"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('microsoft.insights/components/', variables('appInsightsName')), '2015-05-01').InstrumentationKey]"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "dotnet-isolated"
+                        },
+                        {
+                            "name": "netFrameworkVersion",
+                            "value": "v5.0"
+                        }
+                    ],
+                    "cors": {
+                        "allowedOrigins": [
+                            "*"
+                        ],
+                        "supportCredentials": false
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "[variables('serviceBusApiVersion')]",
+            "name": "[variables('serviceBusNamespaceName')]",
+            "type": "Microsoft.ServiceBus/Namespaces",
+            "location": "[resourceGroup().location]",
+            "kind": "Messaging",
+            "sku": {
+                "name": "Standard"
+            },
+            "resources": [
+                {
+                    "apiVersion": "[variables('serviceBusApiVersion')]",
+                    "name": "[variables('serviceBusTopicName')]",
+                    "type": "Topics",
+                    "dependsOn": [
+                        "[concat('Microsoft.ServiceBus/namespaces/', variables('serviceBusNamespaceName'))]"
+                    ],
+                    "properties": {
+                        "path": "[variables('serviceBusTopicName')]",
+                        "defaultMessageTimeToLive": "P0Y0M0DT0H1M0S",
+                        "requiresDuplicateDetection": false,
+                        "autoDeleteOnIdle": false
+                    },
+                    "resources": [
+                        {
+                            "apiVersion": "[variables('serviceBusApiVersion')]",
+                            "name": "[variables('serviceBusSubscriptionName')]",
+                            "type": "Subscriptions",
+                            "dependsOn": [
+                                "[variables('serviceBusTopicName')]"
+                            ],
+                            "properties": {
+                                "maxDeliveryCount": 3,
+                                "defaultMessageTimeToLive": "P0Y0M0DT0H1M0S",
+                                "deadLetteringOnMessageExpiration": false,
+                                "autoDeleteOnIdle": false
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "outputs": {}
+}

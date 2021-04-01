@@ -8,5 +8,8 @@
         public const string PlayersPartitionKey = "Players";
         public const string UsersTable = "Users";
         public const string UsersPartitionKey = "Users";
+        public const string PlayerLogTable = "PlayerLog";
+        public const string PlayerResultTable = "PlayerResults";
+        public const string PlayerResultPartitionKey = "Results";
     }
 }

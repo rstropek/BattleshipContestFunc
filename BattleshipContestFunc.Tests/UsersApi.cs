@@ -51,6 +51,7 @@ namespace BattleshipContestFunc.Tests
             Assert.StartsWith("application/json", mock.Headers.First(h => h.Key == "Content-Type").Value.First());
             Assert.NotNull(resultPayload);
             Assert.Equal(payload.RowKey, resultPayload!.Subject);
+            Assert.Equal(payload.Email, resultPayload!.Email);
             Assert.Equal(payload.NickName, resultPayload!.NickName);
             Assert.Equal(payload.PublicTwitter, resultPayload!.PublicTwitter);
             Assert.Equal(payload.PublicUrl, resultPayload!.PublicUrl);
@@ -72,12 +73,14 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task MeChecksAuthorization()
         {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var usersMock = new Mock<IUsersTable>();
             usersMock.Setup(p => p.GetSingle(It.IsAny<string>()));
 
             var mock = RequestResponseMocker.Create();
-            await CreateApi(usersMock).Me(mock.RequestMock.Object);
+            await CreateApi(usersMock, authMock).Me(mock.RequestMock.Object);
 
+            authMock.Verify(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()), Times.Once);
             usersMock.Verify(p => p.GetSingle(It.IsAny<string>()), Times.Never);
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
@@ -85,12 +88,14 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task RegisterChecksAuthorization()
         {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var usersMock = new Mock<IUsersTable>();
             usersMock.Setup(p => p.Add(It.IsAny<User>()));
 
             var mock = RequestResponseMocker.Create();
-            await CreateApi(usersMock).Add(mock.RequestMock.Object);
+            await CreateApi(usersMock, authMock).Add(mock.RequestMock.Object);
 
+            authMock.Verify(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()), Times.Once);
             usersMock.Verify(p => p.Add(It.IsAny<User>()), Times.Never);
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
@@ -178,9 +183,11 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task PatchChecksAuthorization()
         {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var mock = RequestResponseMocker.Create();
-            await CreateApi(new Mock<IUsersTable>()).Patch(mock.RequestMock.Object);
+            await CreateApi(new Mock<IUsersTable>(), authMock).Patch(mock.RequestMock.Object);
 
+            authMock.Verify(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()), Times.Once);
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
         }
 

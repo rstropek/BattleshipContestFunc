@@ -11,7 +11,7 @@ using Microsoft.Azure.Functions.Worker.Http;
 
 namespace BattleshipContestFunc
 {
-    public record UserGetDto(string Subject, string NickName, string? PublicTwitter, string? PublicUrl);
+    public record UserGetDto(string Subject, string Email, string NickName, string? PublicTwitter, string? PublicUrl);
     public record UserPatchDto(
         string? NickName = null, 
         [property: EmailAddress] string? Email = null,
@@ -101,6 +101,9 @@ namespace BattleshipContestFunc
 
             var entity = await usersTable.GetSingle(subject);
             if (entity == null) return req.CreateResponse(HttpStatusCode.NotFound);
+
+            if (user.PublicUrl == string.Empty) user = user with { PublicUrl = null };
+            if (user.PublicTwitter == string.Empty) user = user with { PublicTwitter = null };
 
             var update = false;
             if (user.NickName != null && user.NickName != entity.NickName)

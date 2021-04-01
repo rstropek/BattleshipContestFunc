@@ -18,5 +18,13 @@ namespace BattleshipContestFunc.Tests
                 .Returns(Task.FromResult<string?>(userSubject));
             return authorizeMock;
         }
+
+        public static Mock<IAuthorize> GetUnauthorizedMock()
+        {
+            var authorizeMock = new Mock<IAuthorize>();
+            authorizeMock.Setup(a => a.TryGetSubject(It.IsAny<HttpHeadersCollection>()))
+                .Returns(Task.FromResult<string?>(null));
+            return authorizeMock;
+        }
     }
 }

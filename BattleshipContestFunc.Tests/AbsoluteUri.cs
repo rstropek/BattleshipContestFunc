@@ -24,5 +24,12 @@ namespace BattleshipContestFunc.Tests
             var attr = new AbsoluteUriAttribute();
             Assert.True(attr.IsValid("https://myserver.com/ab/cd"));
         }
+
+        [Fact]
+        public void Empty()
+        {
+            var attr = new AbsoluteUriAttribute();
+            Assert.True(attr.IsValid(string.Empty));
+        }
     }
 }

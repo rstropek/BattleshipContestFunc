@@ -1,0 +1,15 @@
+# az login --use-device-code
+# az account set --subscription b33f0285-db27-4896-ac5c-df22004b0aba
+
+BASE=bscc
+ENV=dev
+LOC=westeurope
+RG=$BASE-$ENV
+
+# Deploy ARM Template for creating resource group
+az deployment sub create --template-file deploy-rg.json --location $LOC \
+  --parameters baseName=$BASE location=$LOC environment=$ENV
+
+# Deploy ARM Template with app resources
+az deployment group create --resource-group $RG --template-file deploy.json --name $(date +%F_%H-%M-%S) \
+    --parameters baseName=$BASE environment=$ENV

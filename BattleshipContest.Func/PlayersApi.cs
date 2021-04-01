@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -12,7 +14,14 @@ using Microsoft.Azure.Functions.Worker.Http;
 
 namespace BattleshipContestFunc
 {
-    public record PlayerGetDto(Guid Id, string Name, string WebApiUrl, string Creator);
+    public record PlayerGetDto(
+        Guid Id, 
+        string Name, 
+        string WebApiUrl, 
+        string Creator, 
+        bool HasApiKey,
+        DateTime? LastMeasurement,
+        double? AvgNumberOfShots);
     public record PlayerPatchDto(
         string? Name = null,
         [property: AbsoluteUri] string? WebApiUrl = null,
@@ -23,19 +32,26 @@ namespace BattleshipContestFunc
         [property: Required][property: AbsoluteUri][property: MinLength(1)] string WebApiUrl,
         string? ApiKey = null);
 
-    public class PlayersApi : ApiBase
+    public partial class PlayersApi : ApiBase
     {
         private readonly IPlayerTable playerTable;
         private readonly IMapper mapper;
         private readonly IAuthorize authorize;
+        private readonly IPlayerClient playerClient;
+        private readonly IPlayerLogTable playerLogTable;
+        private readonly IPlayerResultTable playerResultTable;
 
         public PlayersApi(IPlayerTable playerTable, IMapper mapper, JsonSerializerOptions jsonOptions,
-            JsonObjectSerializer jsonSerializer, IAuthorize authorize)
+            JsonObjectSerializer jsonSerializer, IAuthorize authorize, IPlayerClient playerClient,
+            IPlayerLogTable playerLogTable, IPlayerResultTable playerResultTable)
             : base(jsonOptions, jsonSerializer)
         {
             this.playerTable = playerTable;
             this.mapper = mapper;
             this.authorize = authorize;
+            this.playerClient = playerClient;
+            this.playerLogTable = playerLogTable;
+            this.playerResultTable = playerResultTable;
         }
 
         private async Task<(Player?, HttpResponseData?)> GetSingleOwning(HttpRequestData req, Guid id, string ownerSubject)
@@ -46,17 +62,41 @@ namespace BattleshipContestFunc
             return (entity, null);
         }
 
+        private async Task<(Player?, HttpResponseData?)> GetSingleOwning(HttpRequestData req, string idString, string ownerSubject)
+        {
+            if (!Guid.TryParseExact(idString, "D", out var id)) return (null, await CreateValidationError(req, GuidParseErrorMessage));
+            var (entity, errorResponse) = await GetSingleOwning(req, id, ownerSubject);
+            if (entity == null) return (null, errorResponse!);
+            return (entity, null);
+        }
+
         [Function("Get")]
         public async Task<HttpResponseData> Get(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "players")] HttpRequestData req)
+                [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "players")] HttpRequestData req)
         {
             // Verify authenticated user is present
             var subject = await authorize.TryGetSubject(req.Headers);
-            if (subject == null) return req .CreateResponse(HttpStatusCode.Unauthorized);
+            if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
 
             // Get and return all players of current user 
             var players = mapper.Map<List<Player>, List<PlayerGetDto>>(await playerTable.Get(p => p.Creator == subject));
-            return await CreateResponse(req, players);
+            var results = await playerResultTable.Get();
+            var resultingPlayers = players.Select(p =>
+            {
+                var result = results.FirstOrDefault(r => r.RowKey == p.Id.ToString());
+                if (result != null)
+                {
+                    return p with
+                    {
+                        LastMeasurement = result.LastMeasurement,
+                        AvgNumberOfShots = result.AvgNumberOfShots
+                    };
+                }
+
+                return p;
+            }).ToList();
+
+            return await CreateResponse(req, resultingPlayers);
         }
 
         [Function("GetSingle")]
@@ -68,9 +108,7 @@ namespace BattleshipContestFunc
             var subject = await authorize.TryGetSubject(req.Headers);
             if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
 
-            if (!Guid.TryParseExact(idString, "D", out var id)) return await CreateValidationError(req, GuidParseErrorMessage);
-
-            var (player, errorResponse) = await GetSingleOwning(req, id, subject);
+            var (player, errorResponse) = await GetSingleOwning(req, idString, subject);
             if (player == null) return errorResponse!;
 
             return await CreateResponse(req, mapper.Map<Player, PlayerGetDto>(player));
@@ -103,6 +141,7 @@ namespace BattleshipContestFunc
             // Convert added player into DTO
             var playerToReturn = mapper.Map<Player, PlayerGetDto>(playerToAdd);
 
+            await playerLogTable.Add(new(playerToAdd.RowKey, playerToAdd.WebApiUrl, "Created player"));
             return await CreateResponse(req, playerToReturn, HttpStatusCode.Created);
         }
 
@@ -121,9 +160,7 @@ namespace BattleshipContestFunc
             var validationError = ValidateModel(player);
             if (validationError != null) return await CreateValidationError(req, validationError);
 
-            if (!Guid.TryParseExact(idString, "D", out var id)) return await CreateValidationError(req, GuidParseErrorMessage);
-
-            var (entity, owningErrorResponse) = await GetSingleOwning(req, id, subject);
+            var (entity, owningErrorResponse) = await GetSingleOwning(req, idString, subject);
             if (entity == null) return owningErrorResponse!;
 
             var update = false;
@@ -148,6 +185,9 @@ namespace BattleshipContestFunc
 
             if (update) await playerTable.Replace(entity);
 
+
+
+            await playerLogTable.Add(new(entity.RowKey, entity.WebApiUrl, $"Patched player"));
             return await CreateResponse(req, mapper.Map<Player, PlayerGetDto>(entity));
         }
 
@@ -160,12 +200,12 @@ namespace BattleshipContestFunc
             var subject = await authorize.TryGetSubject(req.Headers);
             if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
 
-            if (!Guid.TryParseExact(idString, "D", out var id)) return await CreateValidationError(req, GuidParseErrorMessage);
-
-            var (entity, errorResponse) = await GetSingleOwning(req, id, subject);
+            var (entity, errorResponse) = await GetSingleOwning(req, idString, subject);
             if (entity == null) return errorResponse!;
 
             await playerTable.Delete(entity);
+
+            await playerLogTable.Add(new(entity.RowKey, entity.WebApiUrl, $"Deleted player"));
             return req.CreateResponse(HttpStatusCode.NoContent);
         }
     }

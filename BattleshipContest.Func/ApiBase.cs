@@ -69,6 +69,13 @@ namespace BattleshipContestFunc
                     detail),
                 HttpStatusCode.Conflict);
 
+        public async Task<HttpResponseData> CreateDependencyError(HttpRequestData req, string detail)
+            => await CreateResponse(req, new ProblemDetails(
+                    "https://battleshipcontest.net/errors/failed-dependency",
+                    "A request to a service we depend on failed.",
+                    detail),
+                HttpStatusCode.FailedDependency);
+
         [SuppressMessage("Performance", "CA1822", Justification = "Required for unit tests")]
         protected internal string? ValidateModel<T>(T instance) where T: notnull
         {

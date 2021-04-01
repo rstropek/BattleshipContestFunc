@@ -10,7 +10,7 @@ namespace BattleshipContestFunc
         public override bool IsValid(object? objValue)
         {
             if (objValue == null) return true;
-            if (objValue is string value) return Uri.TryCreate(value, UriKind.Absolute, out var _);
+            if (objValue is string value) return value == string.Empty || Uri.TryCreate(value, UriKind.Absolute, out var _);
             return false;
         }
     }

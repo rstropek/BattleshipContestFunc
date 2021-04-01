@@ -31,18 +31,18 @@ namespace BattleshipContestFunc
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/random/getShot")] HttpRequestData req)
         {
             using var reader = new StreamReader(req.Body);
-            BoardContent? boardContent;
+            ShotRequest? request;
             try
             {
                 var bodyContent = await reader.ReadToEndAsync();
-                boardContent = JsonSerializer.Deserialize<BoardContent>(bodyContent, jsonOptions);
+                request = JsonSerializer.Deserialize<ShotRequest>(bodyContent, jsonOptions);
             }
             catch (JsonException ex)
             {
                 return await CreateValidationError(req, $"Could not parse request body ({ex.Message})");
             }
 
-            if (boardContent == null)
+            if (request == null)
             {
                 return await CreateValidationError(req, $"Missing board content in request body.");
             }

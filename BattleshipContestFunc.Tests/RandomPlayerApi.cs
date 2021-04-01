@@ -1,4 +1,5 @@
 using NBattleshipCodingContest.Logic;
+using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -39,7 +40,8 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task GetShot()
         {
-            var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(new BoardContent(), config.JsonOptions));
+            var shotRequest = new ShotRequest(new List<SinglePlayerGameLogRecord>(), null, new BoardContent().ToShortString());
+            var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(shotRequest, config.JsonOptions));
             var api = new BattleshipContestFunc.RandomPlayerApi(config.JsonOptions, config.Serializer);
             await api.GetShot(mock.RequestMock.Object);
             
