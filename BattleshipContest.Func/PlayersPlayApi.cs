@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
+using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
@@ -38,7 +39,7 @@ namespace BattleshipContestFunc
             return req.CreateResponse(HttpStatusCode.OK);
         }
 
-        public record MeasurePlayerRequestMessage(Guid PlayerId, string PlayerName, string WebApiUrl, string? ApiKey);
+        public record MeasurePlayerRequestMessage(Guid PlayerId);
 
         [Function("PlayGame")]
         public async Task<PlayGameOutput> Game(
@@ -54,8 +55,7 @@ namespace BattleshipContestFunc
 
             return new PlayGameOutput
             {
-                Message = JsonSerializer.Serialize(new MeasurePlayerRequestMessage(
-                    Guid.Parse(entity.RowKey), entity.Name, entity.WebApiUrl, entity.ApiKey), jsonOptions),
+                Message = JsonSerializer.Serialize(new MeasurePlayerRequestMessage(Guid.Parse(entity.RowKey)), jsonOptions),
                 HttpResponse = req.CreateResponse(HttpStatusCode.Accepted)
             };
         }
@@ -97,13 +97,23 @@ namespace BattleshipContestFunc
                 return;
             }
 
-            if (string.IsNullOrEmpty(message.WebApiUrl))
+            var player = await playerTable.GetSingle(message.PlayerId);
+            if (player == null)
+            {
+                logger.LogCritical($"Player {message.PlayerId} not found");
+                return;
+            }
+
+            player.TournamentInProgressSince = DateTime.UtcNow;
+            await playerTable.Replace(player);
+
+            if (string.IsNullOrEmpty(player.WebApiUrl))
             {
                 logger.LogCritical($"Message {sbMessage} does not contain a web api url");
                 return;
             }
 
-            if (string.IsNullOrEmpty(message.PlayerName))
+            if (string.IsNullOrEmpty(player.Name))
             {
                 logger.LogCritical($"Message {sbMessage} does not contain a player name");
                 return;
@@ -111,13 +121,13 @@ namespace BattleshipContestFunc
 
             try
             {
-                await playerLogTable.Add(new(message.PlayerId, message.WebApiUrl, $"Getting player ready for tournament"));
-                await playerClient.GetReady(message.WebApiUrl, message.ApiKey);
+                await playerLogTable.Add(new(message.PlayerId, player.WebApiUrl, $"Getting player ready for tournament"));
+                await playerClient.GetReady(player.WebApiUrl, player.ApiKey);
             }
             catch (Exception ex)
             {
                 var errorMessage = ex.GetFullDescription();
-                await playerLogTable.AddException(message.PlayerId, message.WebApiUrl, errorMessage);
+                await playerLogTable.AddException(message.PlayerId, player.WebApiUrl, errorMessage);
                 return;
             }
 
@@ -126,17 +136,17 @@ namespace BattleshipContestFunc
             var totalNumberOfShots = 0;
             var numberOfErrors = 0;
             const int maxNumberOfErrors = 5;
-            await playerLogTable.Add(new(message.PlayerId, message.WebApiUrl, $"Starting tournament"));
+            await playerLogTable.Add(new(message.PlayerId, player.WebApiUrl, $"Starting tournament"));
             for (var i = 0; i < numberOfGames; i++)
             {
                 try
                 {
-                    totalNumberOfShots += await playerClient.PlayGame(message.WebApiUrl, message.ApiKey);
+                    totalNumberOfShots += await playerClient.PlayGame(player.WebApiUrl, player.ApiKey);
                 }
                 catch (Exception ex)
                 {
                     var errorMessage = ex.GetFullDescription();
-                    await playerLogTable.AddException(message.PlayerId, message.WebApiUrl, errorMessage);
+                    await playerLogTable.AddException(message.PlayerId, player.WebApiUrl, errorMessage);
 
                     numberOfErrors++;
                     if (numberOfErrors > maxNumberOfErrors)
@@ -152,11 +162,18 @@ namespace BattleshipContestFunc
             var avgShots = ((double)totalNumberOfShots) / numberOfGames;
             await playerResultTable.Add(new(message.PlayerId)
             {
-                Name = message.PlayerName,
+                Name = player.Name,
                 AvgNumberOfShots = avgShots,
                 LastMeasurement = DateTime.UtcNow
             });
-            await playerLogTable.Add(new(message.PlayerId, message.WebApiUrl, $"Finished tournament with total # of shots {totalNumberOfShots}, avg # of shots {avgShots}"));
+            await playerLogTable.Add(new(message.PlayerId, player.WebApiUrl, $"Finished tournament with total # of shots {totalNumberOfShots}, avg # of shots {avgShots}"));
+
+            player = await playerTable.GetSingle(message.PlayerId);
+            if (player != null)
+            {
+                player.TournamentInProgressSince = null;
+                await playerTable.Replace(player);
+            }
         }
     }
 }

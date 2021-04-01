@@ -21,16 +21,20 @@ namespace BattleshipContestFunc
         string Creator, 
         bool HasApiKey,
         DateTime? LastMeasurement,
-        double? AvgNumberOfShots);
+        double? AvgNumberOfShots,
+        string? GitHubUrl,
+        DateTime? TournamentInProgressSince);
     public record PlayerPatchDto(
         string? Name = null,
         [property: AbsoluteUri] string? WebApiUrl = null,
-        string? ApiKey = null);
+        string? ApiKey = null,
+        [property: AbsoluteUri] string? GitHubUrl = null);
     public record PlayerAddDto(
         Guid Id,
         [property: Required][property: MinLength(1)] string Name,
         [property: Required][property: AbsoluteUri][property: MinLength(1)] string WebApiUrl,
-        string? ApiKey = null);
+        string? ApiKey = null,
+        [property: AbsoluteUri] string? GitHubUrl = null);
 
     public partial class PlayersApi : ApiBase
     {
@@ -180,6 +184,12 @@ namespace BattleshipContestFunc
             if (player.ApiKey != null && player.ApiKey != entity.ApiKey)
             {
                 entity.ApiKey = player.ApiKey.Length == 0 ? null : player.ApiKey;
+                update = true;
+            }
+
+            if (player.GitHubUrl != null && player.GitHubUrl != entity.GitHubUrl)
+            {
+                entity.GitHubUrl = player.GitHubUrl.Length == 0 ? null : player.GitHubUrl;
                 update = true;
             }
 

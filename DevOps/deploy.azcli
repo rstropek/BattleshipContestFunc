@@ -2,7 +2,7 @@
 # az account set --subscription b33f0285-db27-4896-ac5c-df22004b0aba
 
 BASE=bscc
-ENV=dev
+ENV=dev-rainer
 LOC=westeurope
 RG=$BASE-$ENV
 

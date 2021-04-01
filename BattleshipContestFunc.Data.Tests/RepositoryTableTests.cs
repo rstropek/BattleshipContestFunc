@@ -1,5 +1,4 @@
-﻿using Microsoft.Azure.Cosmos.Table.Queryable;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Moq;
 using System;
 using System.Linq;

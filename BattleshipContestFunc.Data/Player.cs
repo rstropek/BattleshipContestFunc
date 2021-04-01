@@ -22,5 +22,9 @@ namespace BattleshipContestFunc.Data
         public string? ApiKey { get; set; }
 
         public string Creator { get; set; } = string.Empty;
+
+        public string? GitHubUrl { get; set; }
+
+        public DateTime? TournamentInProgressSince { get; set; }
     }
 }

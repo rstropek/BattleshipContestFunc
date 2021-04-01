@@ -17,7 +17,7 @@ jobs:
       FUNCTION_NAME: ${{ secrets.FUNCTION_NAME }}
       AAD_TENANT: ${{ secrets.AAD_TENANT }}
       BASE: bscc
-      ENV: dev
+      ENV: prod
       LOC: westeurope
 
     steps:
@@ -59,6 +59,8 @@ jobs:
       - name: ⛅ Deploy ARM Template
         working-directory: DevOps
         run: |
+          az deployment sub create --template-file deploy-rg.json --location $LOC \
+            --parameters baseName=$BASE location=$LOC environment=$ENV
           az deployment group create --resource-group $BASE-$ENV --template-file deploy.json --name $(date +%F_%H-%M-%S) \
             --parameters baseName=$BASE environment=$ENV
 

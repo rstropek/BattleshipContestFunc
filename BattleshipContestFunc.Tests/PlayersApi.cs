@@ -150,7 +150,8 @@ namespace BattleshipContestFunc.Tests
         {
             var payload = new Player(Guid.Empty)
             { 
-                Name = "Dummy", WebApiUrl = "https://somewhere.com/api", Creator = "foo"
+                Name = "Dummy", WebApiUrl = "https://somewhere.com/api", Creator = "foo",
+                GitHubUrl = "https://github.com/asdf"
             };
             var playerMock = new Mock<IPlayerTable>();
             playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>())).Returns(Task.FromResult<Player?>(payload));
@@ -167,6 +168,7 @@ namespace BattleshipContestFunc.Tests
             Assert.Equal(payload.Name, resultPayload.Name);
             Assert.Equal(payload.WebApiUrl, resultPayload.WebApiUrl);
             Assert.Equal(payload.Creator, resultPayload.Creator);
+            Assert.Equal(payload.GitHubUrl, resultPayload.GitHubUrl);
         }
 
         [Fact]
@@ -232,7 +234,7 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Add(It.IsAny<Player>()));
 
             var mock = RequestResponseMocker.Create(
-                new PlayerAddDto(Guid.Empty, "Dummy", "https://someserver.com/api?x=a", "C0d€"), config.JsonOptions);
+                new PlayerAddDto(Guid.Empty, "Dummy", "https://someserver.com/api?x=a", "C0d€", "https://github.com/asdf"), config.JsonOptions);
             await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo")).Add(mock.RequestMock.Object);
             var resultPayload = JsonSerializer.Deserialize<PlayerGetDto>(mock.ResponseBodyAsString, config.JsonOptions);
 
@@ -244,6 +246,7 @@ namespace BattleshipContestFunc.Tests
             Assert.Equal("Dummy", resultPayload.Name);
             Assert.Equal("https://someserver.com/api?x=a", resultPayload.WebApiUrl);
             Assert.Equal("foo", resultPayload.Creator);
+            Assert.Equal("https://github.com/asdf", resultPayload.GitHubUrl);
         }
 
         [Fact]
