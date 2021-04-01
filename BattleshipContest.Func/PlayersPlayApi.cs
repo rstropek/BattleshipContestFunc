@@ -131,7 +131,7 @@ namespace BattleshipContestFunc
                 return;
             }
 
-            const int numberOfGames = 100;
+            const int numberOfGames = 25;
             const int numberOfShotsForException = 200;
             var totalNumberOfShots = 0;
             var numberOfErrors = 0;

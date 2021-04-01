@@ -120,7 +120,11 @@
                             "value": "v5.0"
                         },
                         {
-                            "name": "AzureFunctionsJobHost__logging__logLevel",
+                            "name": "AzureFunctionsJobHost__logging__logLevel__default",
+                            "value": "Error"
+                        },
+                        {
+                            "name": "AzureFunctionsJobHost__logging__logLevel__Host.Aggregator",
                             "value": "Error"
                         },
                         {
