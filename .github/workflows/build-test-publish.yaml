@@ -16,6 +16,10 @@ jobs:
       SUBSCRIPTION: ${{ secrets.SUBSCRIPTION }}
       FUNCTION_NAME: ${{ secrets.FUNCTION_NAME }}
       AAD_TENANT: ${{ secrets.AAD_TENANT }}
+      BASE: bscc
+      ENV: dev
+      LOC: westeurope
+
     steps:
       - uses: actions/checkout@v2
         name: 🚚 Checkout
@@ -51,6 +55,12 @@ jobs:
         run: |
           az login --service-principal -u $DEPLOYMENT_PRINCIPAL_NAME -p $DEPLOYMENT_PRINCIPAL_SECRET --tenant $AAD_TENANT
           az account set --subscription $SUBSCRIPTION
+
+      - name: ⛅ Deploy ARM Template
+        working-directory: DevOps
+        run: |
+          az deployment group create --resource-group $BASE-$ENV --template-file deploy.json --name $(date +%F_%H-%M-%S) \
+            --parameters baseName=$BASE environment=$ENV
 
       - name: 📦 Deploy
         working-directory: BattleshipContest.Func

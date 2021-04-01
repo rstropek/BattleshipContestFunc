@@ -122,6 +122,10 @@
                         {
                             "name": "AzureFunctionsJobHost__logging__logLevel",
                             "value": "Error"
+                        },
+                        {
+                            "name": "AzureWebJobsServiceBus",
+                            "value": "[listKeys(resourceId('Microsoft.ServiceBus/namespaces/AuthorizationRules',variables('serviceBusNamespaceName'),'RootManageSharedAccessKey'),'2015-08-01').primaryConnectionString]"
                         }
                     ],
                     "cors": {
