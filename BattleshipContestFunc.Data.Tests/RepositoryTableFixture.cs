@@ -6,7 +6,7 @@ using Xunit;
 
 namespace BattleshipContestFunc.Data.Tests
 {
-    public class RepositoryTableFixture : RepositoryFixture, IAsyncLifetime
+    public class RepositoryTableFixture : StorageFixture, IAsyncLifetime
     {
         public RepositoryTableFixture()
         {

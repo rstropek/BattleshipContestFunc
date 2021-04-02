@@ -1,8 +1,9 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
-using BattleshipContestFunc.Data;
+using Azure;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
@@ -25,8 +26,8 @@ namespace BattleshipContestFunc
 
             try
             {
-                await playerClient.GetReady(entity.WebApiUrl, entity.ApiKey);
-                await playerClient.PlaySingleMoveInRandomGame(entity.WebApiUrl, entity.ApiKey);
+                await gameClient.GetReadyForGame(entity.WebApiUrl, entity.ApiKey);
+                await gameClient.PlaySingleMoveInRandomGame(entity.WebApiUrl, entity.ApiKey);
             }
             catch (Exception ex)
             {
@@ -39,12 +40,35 @@ namespace BattleshipContestFunc
             return req.CreateResponse(HttpStatusCode.OK);
         }
 
-        public record MeasurePlayerRequestMessage(Guid PlayerId, int CompletedGameCount = 0, int NumberOfShots = 0,
-            string? WebApiUrl = null, string? ApiKey = null, string? PlayerName = null,
-            string? TournamentStartedLogRowKey = null);
+        public record MeasurePlayerRequestMessage(
+            Guid PlayerId,
+            [property: Required][property: MinLength(1)] string LeaseId,
+            DateTime LeaseEnd,
+            [property: Required][property: AbsoluteUri][property: MinLength(1)] string WebApiUrl,
+            string? ApiKey,
+            [property: Required][property: MinLength(1)] string PlayerName,
+            [property: Required][property: MinLength(1)] string TournamentStartedLogRowKey,
+            int CompletedGameCount = 0,
+            int NumberOfShots = 0);
+
+        private static readonly TimeSpan LeaseBuffer = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(60);
+
+        private static DateTime GetLeaseEnd() => DateTime.UtcNow + LeaseDuration - LeaseBuffer;
+
+        private async Task<MeasurePlayerRequestMessage> RenewLease(MeasurePlayerRequestMessage message, bool force = false)
+        {
+            if (force || DateTime.UtcNow > message.LeaseEnd)
+            {
+                await playerGameLease.Renew(message.PlayerId, message.LeaseId);
+                return message with { LeaseEnd = GetLeaseEnd() };
+            }
+
+            return message;
+        }
 
         [Function("PlayGame")]
-        public async Task<PlayGameOutput> Game(
+        public async Task<PlayGameOutput> Play(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "players/{idString}/play")] HttpRequestData req,
             string idString)
         {
@@ -54,10 +78,48 @@ namespace BattleshipContestFunc
 
             var (entity, errorResponse) = await GetSingleOwning(req, idString, subject);
             if (entity == null) return new PlayGameOutput() { HttpResponse = errorResponse };
+            var playerId = Guid.Parse(entity.RowKey);
 
+            try
+            {
+                await playerLogTable.Add(new(playerId, entity.WebApiUrl, $"Getting player ready for tournament"));
+                await gameClient.GetReadyForGame(entity.WebApiUrl, entity.ApiKey);
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = ex.GetFullDescription();
+                await playerLogTable.AddException(playerId, entity.WebApiUrl, errorMessage);
+                return new PlayGameOutput
+                {
+                    Message = null,
+                    HttpResponse = await CreateDependencyError(req, $"Player not ready\n{errorMessage}")
+                };
+            }
+
+            string leaseId;
+            try
+            {
+                leaseId = await playerGameLease.Acquire(playerId, LeaseDuration);
+            }
+            catch (RequestFailedException)
+            {
+                return new PlayGameOutput
+                {
+                    Message = null,
+                    HttpResponse = await CreateConflictError(req, "Game already in progress")
+                };
+            }
+
+            var startedEntry = await playerLogTable.Add(
+                new(playerId, entity.WebApiUrl, $"Tournament") { Started = DateTime.UtcNow });
+            entity.TournamentInProgressSince = DateTime.UtcNow;
+            await playerTable.Replace(entity);
+
+            var message = new MeasurePlayerRequestMessage(playerId, leaseId, GetLeaseEnd(),
+                entity.WebApiUrl, entity.ApiKey, entity.Name, startedEntry!.RowKey);
             return new PlayGameOutput
             {
-                Message = JsonSerializer.Serialize(new MeasurePlayerRequestMessage(Guid.Parse(entity.RowKey)), jsonOptions),
+                Message = JsonSerializer.Serialize(message, jsonOptions),
                 HttpResponse = req.CreateResponse(HttpStatusCode.Accepted)
             };
         }
@@ -102,72 +164,10 @@ namespace BattleshipContestFunc
                 return null;
             }
 
-            if (message.CompletedGameCount > 0)
-            {
-                if (string.IsNullOrEmpty(message.WebApiUrl))
-                {
-                    logger.LogCritical($"Web API URL must not be empty");
-                    return null;
-                }
+            var validationError = ValidateModel(message);
+            if (validationError != null) return null;
 
-                if (string.IsNullOrEmpty(message.PlayerName))
-                {
-                    logger.LogCritical($"Player name must not be empty");
-                    return null;
-                }
-
-                if (string.IsNullOrEmpty(message.TournamentStartedLogRowKey))
-                {
-                    logger.LogCritical($"Row key of log entry for tournament start must not be empty");
-                    return null;
-                }
-            }
-            else
-            {
-                var player = await playerTable.GetSingle(message.PlayerId);
-                if (player == null)
-                {
-                    logger.LogCritical($"Player {message.PlayerId} not found");
-                    return null;
-                }
-
-                if (string.IsNullOrEmpty(player.WebApiUrl))
-                {
-                    logger.LogCritical($"Message {sbMessage} does not contain a web api url");
-                    return null;
-                }
-
-                if (string.IsNullOrEmpty(player.Name))
-                {
-                    logger.LogCritical($"Message {sbMessage} does not contain a player name");
-                    return null;
-                }
-
-                try
-                {
-                    await playerLogTable.Add(new(message.PlayerId, player.WebApiUrl, $"Getting player ready for tournament"));
-                    await playerClient.GetReady(player.WebApiUrl, player.ApiKey);
-                }
-                catch (Exception ex)
-                {
-                    var errorMessage = ex.GetFullDescription();
-                    await playerLogTable.AddException(message.PlayerId, player.WebApiUrl, errorMessage);
-                    return null;
-                }
-
-                var startedEntry = await playerLogTable.Add(
-                    new(message.PlayerId, player.WebApiUrl, $"Tournament") { Started = DateTime.UtcNow });
-                player.TournamentInProgressSince = DateTime.UtcNow;
-                await playerTable.Replace(player);
-
-                message = message with
-                {
-                    WebApiUrl = player.WebApiUrl,
-                    ApiKey = player.ApiKey,
-                    PlayerName = player.Name,
-                    TournamentStartedLogRowKey = startedEntry!.RowKey
-                };
-            }
+            message = await RenewLease(message);
 
             var numberOfErrors = 0;
             var numberOfShots = 0;
@@ -175,11 +175,13 @@ namespace BattleshipContestFunc
             var gameLogEntry = await playerLogTable.Add(
                 new(message.PlayerId, message.WebApiUrl, $"Game {message.CompletedGameCount + 1}") { Started = DateTime.UtcNow });
             while (true)
-            { 
-
+            {
                 try
                 {
-                    numberOfShots = await playerClient.PlayGame(message.WebApiUrl, message.ApiKey);
+                    numberOfShots = await gameClient.PlayGame(
+                        message.WebApiUrl,
+                        async () => { message = await RenewLease(message); },
+                        message.ApiKey);
                     break;
                 }
                 catch (Exception ex)
@@ -191,6 +193,7 @@ namespace BattleshipContestFunc
                     if (numberOfErrors > maxNumberOfErrors)
                     {
                         await playerLogTable.Add(new(message.PlayerId, "Too many errors, stopping tournament"));
+                        await playerGameLease.Release(message.PlayerId, message.LeaseId);
                         return null;
                     }
                 }
@@ -236,9 +239,11 @@ namespace BattleshipContestFunc
                     await playerTable.Replace(player);
                 }
 
+                await playerGameLease.Release(message.PlayerId, message.LeaseId);
                 return null;
             }
 
+            message = await RenewLease(message, true);
             return JsonSerializer.Serialize(message, jsonOptions);
         }
     }

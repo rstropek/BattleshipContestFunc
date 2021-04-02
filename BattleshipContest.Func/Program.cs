@@ -32,14 +32,17 @@ namespace BattleshipContestFunc
                     var logger = new LoggerConfiguration()
                         .ReadFrom.Configuration(context.Configuration)
                         .CreateLogger();
+                    services.AddSingleton<IPlayerHttpClientFactory, PlayerHttpClientFactory>();
                     services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(logger, false));
                     services.AddSingleton<IRepository, Repository>();
+                    services.AddSingleton<IPlayerGameLeaseManager, PlayerGameLeaseManager>();
                     services.AddSingleton<IPlayerTable, PlayerTable>();
                     services.AddSingleton<IPlayerLogTable, PlayerLogTable>();
                     services.AddSingleton<IUsersTable, UsersTable>();
                     services.AddSingleton<IPlayerResultTable, PlayerResultTable>();
                     services.AddSingleton<IAuthorize, Authorize>();
                     services.AddSingleton<IPlayerClient, PlayerClient>();
+                    services.AddSingleton<IGameClient, GameClient>();
                     services.AddSingleton<IBoardFiller, RandomBoardFiller>();
                     services.AddAutoMapper(typeof(MappingProfile));
                     var jsonOptions = new JsonSerializerOptions

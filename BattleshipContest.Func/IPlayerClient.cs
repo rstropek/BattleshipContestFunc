@@ -1,12 +1,12 @@
-﻿using System.Threading.Tasks;
+﻿using NBattleshipCodingContest.Logic;
+using System.Threading.Tasks;
 
 namespace BattleshipContestFunc
 {
     public interface IPlayerClient
     {
         Task GetReady(string playerWebApiUrl, string? apiKey = null);
-        Task<int> PlayGame(string playerWebApiUrl, string? apiKey = null);
 
-        Task PlaySingleMoveInRandomGame(string playerWebApiUrl, string? apiKey = null);
+        Task<BoardIndex> GetShot(string playerWebApiUrl, ISinglePlayerGame game, string? apiKey = null);
     }
 }

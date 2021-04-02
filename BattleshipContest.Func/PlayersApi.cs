@@ -41,21 +41,23 @@ namespace BattleshipContestFunc
         private readonly IPlayerTable playerTable;
         private readonly IMapper mapper;
         private readonly IAuthorize authorize;
-        private readonly IPlayerClient playerClient;
+        private readonly IGameClient gameClient;
         private readonly IPlayerLogTable playerLogTable;
         private readonly IPlayerResultTable playerResultTable;
+        private readonly IPlayerGameLeaseManager playerGameLease;
 
         public PlayersApi(IPlayerTable playerTable, IMapper mapper, JsonSerializerOptions jsonOptions,
-            JsonObjectSerializer jsonSerializer, IAuthorize authorize, IPlayerClient playerClient,
-            IPlayerLogTable playerLogTable, IPlayerResultTable playerResultTable)
+            JsonObjectSerializer jsonSerializer, IAuthorize authorize, IGameClient gameClient,
+            IPlayerLogTable playerLogTable, IPlayerResultTable playerResultTable, IPlayerGameLeaseManager playerGameLease)
             : base(jsonOptions, jsonSerializer)
         {
             this.playerTable = playerTable;
             this.mapper = mapper;
             this.authorize = authorize;
-            this.playerClient = playerClient;
+            this.gameClient = gameClient;
             this.playerLogTable = playerLogTable;
             this.playerResultTable = playerResultTable;
+            this.playerGameLease = playerGameLease;
         }
 
         private async Task<(Player?, HttpResponseData?)> GetSingleOwning(HttpRequestData req, Guid id, string ownerSubject)
