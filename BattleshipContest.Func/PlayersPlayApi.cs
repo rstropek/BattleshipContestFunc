@@ -13,21 +13,19 @@ using Microsoft.Extensions.Logging;
 
 namespace BattleshipContestFunc
 {
-    public class PlayersPlayApi : PlayerApiBase
+    public class PlayersPlayApi : PlayersApiBase
     {
-        private readonly IMapper mapper;
         private readonly IAuthorize authorize;
         private readonly IGameClient gameClient;
         private readonly IPlayerLogTable playerLogTable;
         private readonly IPlayerResultTable playerResultTable;
         private readonly IPlayerGameLeaseManager playerGameLease;
 
-        public PlayersPlayApi(IPlayerTable playerTable, IMapper mapper, JsonSerializerOptions jsonOptions,
+        public PlayersPlayApi(IPlayerTable playerTable, JsonSerializerOptions jsonOptions,
             JsonObjectSerializer jsonSerializer, IAuthorize authorize, IGameClient gameClient,
             IPlayerLogTable playerLogTable, IPlayerResultTable playerResultTable, IPlayerGameLeaseManager playerGameLease)
             : base(playerTable, jsonOptions, jsonSerializer)
         {
-            this.mapper = mapper;
             this.authorize = authorize;
             this.gameClient = gameClient;
             this.playerLogTable = playerLogTable;
@@ -79,7 +77,7 @@ namespace BattleshipContestFunc
 
         private static DateTime GetLeaseEnd() => DateTime.UtcNow + LeaseDuration - LeaseBuffer;
 
-        private async Task<MeasurePlayerRequestMessage> RenewLease(MeasurePlayerRequestMessage message, bool force = false)
+        internal async Task<MeasurePlayerRequestMessage> RenewLease(MeasurePlayerRequestMessage message, bool force = false)
         {
             if (force || DateTime.UtcNow > message.LeaseEnd)
             {

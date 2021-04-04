@@ -8,11 +8,11 @@ using System.Threading.Tasks;
 
 namespace BattleshipContestFunc
 {
-    public abstract class PlayerApiBase : ApiBase
+    public abstract class PlayersApiBase : ApiBase
     {
         protected readonly IPlayerTable playerTable;
 
-        protected PlayerApiBase(IPlayerTable playerTable, JsonSerializerOptions jsonOptions, JsonObjectSerializer jsonSerializer)
+        protected PlayersApiBase(IPlayerTable playerTable, JsonSerializerOptions jsonOptions, JsonObjectSerializer jsonSerializer)
             : base(jsonOptions, jsonSerializer)
         {
             this.playerTable = playerTable;

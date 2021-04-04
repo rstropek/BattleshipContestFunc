@@ -35,7 +35,7 @@ namespace BattleshipContestFunc
         string? ApiKey = null,
         [property: AbsoluteUri] string? GitHubUrl = null);
 
-    public class PlayersApi : PlayerApiBase
+    public class PlayersApi : PlayersApiBase
     {
         private readonly IMapper mapper;
         private readonly IAuthorize authorize;

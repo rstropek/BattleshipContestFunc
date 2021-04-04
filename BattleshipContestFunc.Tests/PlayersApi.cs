@@ -22,14 +22,6 @@ namespace BattleshipContestFunc.Tests
             this.config = config;
         }
 
-        private BattleshipContestFunc.PlayersApi CreateApi(Mock<IPlayerTable> playerMock)
-        {
-            var authorizeMock = new Mock<IAuthorize>();
-            authorizeMock.Setup(a => a.GetUser(It.IsAny<HttpHeadersCollection>()))
-                .Returns(Task.FromResult<ClaimsPrincipal?>(null));
-            return CreateApi(playerMock, authorizeMock);
-        }
-
         private BattleshipContestFunc.PlayersApi CreateApi(Mock<IPlayerTable> playerMock,
             Mock<IAuthorize> authorize, Mock<IPlayerResultTable>? resultsMock = null)
         {
