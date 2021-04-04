@@ -3,15 +3,38 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
+using AutoMapper;
 using Azure;
+using Azure.Core.Serialization;
+using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 
 namespace BattleshipContestFunc
 {
-    public partial class PlayersApi : ApiBase
+    public class PlayersPlayApi : PlayerApiBase
     {
+        private readonly IMapper mapper;
+        private readonly IAuthorize authorize;
+        private readonly IGameClient gameClient;
+        private readonly IPlayerLogTable playerLogTable;
+        private readonly IPlayerResultTable playerResultTable;
+        private readonly IPlayerGameLeaseManager playerGameLease;
+
+        public PlayersPlayApi(IPlayerTable playerTable, IMapper mapper, JsonSerializerOptions jsonOptions,
+            JsonObjectSerializer jsonSerializer, IAuthorize authorize, IGameClient gameClient,
+            IPlayerLogTable playerLogTable, IPlayerResultTable playerResultTable, IPlayerGameLeaseManager playerGameLease)
+            : base(playerTable, jsonOptions, jsonSerializer)
+        {
+            this.mapper = mapper;
+            this.authorize = authorize;
+            this.gameClient = gameClient;
+            this.playerLogTable = playerLogTable;
+            this.playerResultTable = playerResultTable;
+            this.playerGameLease = playerGameLease;
+        }
+
         [Function("TestPlayer")]
         public async Task<HttpResponseData> Test(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "players/{idString}/test")] HttpRequestData req,
@@ -21,22 +44,22 @@ namespace BattleshipContestFunc
             var subject = await authorize.TryGetSubject(req.Headers);
             if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
 
-            var (entity, errorResponse) = await GetSingleOwning(req, idString, subject);
-            if (entity == null) return errorResponse!;
+            var (player, errorResponse) = await GetSingleOwning(req, idString, subject);
+            if (player == null) return errorResponse!;
 
             try
             {
-                await gameClient.GetReadyForGame(entity.WebApiUrl, entity.ApiKey);
-                await gameClient.PlaySingleMoveInRandomGame(entity.WebApiUrl, entity.ApiKey);
+                await gameClient.GetReadyForGame(player.WebApiUrl, player.ApiKey);
+                await gameClient.PlaySingleMoveInRandomGame(player.WebApiUrl, player.ApiKey);
             }
             catch (Exception ex)
             {
                 var errorMessage = ex.GetFullDescription();
-                await playerLogTable.AddException(entity.RowKey, entity.WebApiUrl, errorMessage);
+                await playerLogTable.AddException(player.RowKey, player.WebApiUrl, errorMessage);
                 return await CreateDependencyError(req, errorMessage);
             }
 
-            await playerLogTable.Add(new(entity.RowKey, entity.WebApiUrl, $"Successfully tested player"));
+            await playerLogTable.Add(new(player.RowKey, player.WebApiUrl, $"Successfully tested player"));
             return req.CreateResponse(HttpStatusCode.OK);
         }
 
@@ -76,19 +99,19 @@ namespace BattleshipContestFunc
             var subject = await authorize.TryGetSubject(req.Headers);
             if (subject == null) return new PlayGameOutput() { HttpResponse = req.CreateResponse(HttpStatusCode.Unauthorized) }; ;
 
-            var (entity, errorResponse) = await GetSingleOwning(req, idString, subject);
-            if (entity == null) return new PlayGameOutput() { HttpResponse = errorResponse };
-            var playerId = Guid.Parse(entity.RowKey);
+            var (player, errorResponse) = await GetSingleOwning(req, idString, subject);
+            if (player == null) return new PlayGameOutput() { HttpResponse = errorResponse };
+            var playerId = player.GetPlayerIdGuid();
 
             try
             {
-                await playerLogTable.Add(new(playerId, entity.WebApiUrl, $"Getting player ready for tournament"));
-                await gameClient.GetReadyForGame(entity.WebApiUrl, entity.ApiKey);
+                await playerLogTable.Add(new(playerId, player.WebApiUrl, $"Getting player ready for tournament"));
+                await gameClient.GetReadyForGame(player.WebApiUrl, player.ApiKey);
             }
             catch (Exception ex)
             {
                 var errorMessage = ex.GetFullDescription();
-                await playerLogTable.AddException(playerId, entity.WebApiUrl, errorMessage);
+                await playerLogTable.AddException(playerId, player.WebApiUrl, errorMessage);
                 return new PlayGameOutput
                 {
                     Message = null,
@@ -111,12 +134,12 @@ namespace BattleshipContestFunc
             }
 
             var startedEntry = await playerLogTable.Add(
-                new(playerId, entity.WebApiUrl, $"Tournament") { Started = DateTime.UtcNow });
-            entity.TournamentInProgressSince = DateTime.UtcNow;
-            await playerTable.Replace(entity);
+                new(playerId, player.WebApiUrl, $"Tournament") { Started = DateTime.UtcNow });
+            player.TournamentInProgressSince = DateTime.UtcNow;
+            await playerTable.Replace(player);
 
             var message = new MeasurePlayerRequestMessage(playerId, leaseId, GetLeaseEnd(),
-                entity.WebApiUrl, entity.ApiKey, entity.Name, startedEntry!.RowKey);
+                player.WebApiUrl, player.ApiKey, player.Name, startedEntry!.RowKey);
             return new PlayGameOutput
             {
                 Message = JsonSerializer.Serialize(message, jsonOptions),

@@ -10,7 +10,7 @@ using Xunit;
 
 namespace BattleshipContestFunc.Tests
 {
-    public class HttpClientExtensionsTests
+    public class PlayerHttpClientTests
     {
         private static ISetup<HttpMessageHandler, Task<HttpResponseMessage>> SetupSendAsync(Mock<HttpMessageHandler> mockHttpMessageHandler)
         {

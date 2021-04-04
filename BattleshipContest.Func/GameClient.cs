@@ -6,13 +6,13 @@ namespace BattleshipContestFunc
 {
     public class GameClient : IGameClient
     {
-        private readonly IBoardFiller filler;
         private readonly IPlayerClient playerClient;
+        private readonly ISinglePlayerGameFactory gameFactory;
 
-        public GameClient(IBoardFiller filler, IPlayerClient playerClient)
+        public GameClient(IPlayerClient playerClient, ISinglePlayerGameFactory gameFactory)
         {
-            this.filler = filler;
             this.playerClient = playerClient;
+            this.gameFactory = gameFactory;
         }
 
         public async Task GetReadyForGame(string playerWebApiUrl, string? apiKey = null)
@@ -20,7 +20,7 @@ namespace BattleshipContestFunc
 
         public async Task PlaySingleMoveInRandomGame(string playerWebApiUrl, string? apiKey = null)
         {
-            static void ShootSomeRandomShots(SinglePlayerGame game)
+            static void ShootSomeRandomShots(ISinglePlayerGame game)
             {
                 var rand = new Random();
                 while (true)
@@ -30,9 +30,7 @@ namespace BattleshipContestFunc
                 }
             }
 
-            var board = new BattleshipBoard();
-            filler.Fill(BattleshipBoard.Ships, board);
-            var game = new SinglePlayerGame(Guid.Empty, 0, board, new BoardContent(SquareContent.Unknown));
+            var game = gameFactory.Create(0);
             ShootSomeRandomShots(game);
 
             await playerClient.GetShot(playerWebApiUrl, game, apiKey);
@@ -40,10 +38,7 @@ namespace BattleshipContestFunc
 
         public async Task<int> PlayGame(string playerWebApiUrl, Func<Task>? postRoundCallback = null, string? apiKey = null)
         {
-            var board = new BattleshipBoard();
-            filler.Fill(BattleshipBoard.Ships, board);
-            var game = new SinglePlayerGame(Guid.Empty, 0, board, new BoardContent(SquareContent.Unknown));
-
+            var game = gameFactory.Create(0);
             while (game.GetGameState(BattleshipBoard.Ships) == SinglePlayerGameState.InProgress)
             {
                 var shot = await playerClient.GetShot(playerWebApiUrl, game, apiKey);

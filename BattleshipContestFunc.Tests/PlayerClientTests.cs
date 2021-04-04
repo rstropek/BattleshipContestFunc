@@ -8,7 +8,6 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -32,12 +31,16 @@ namespace BattleshipContestFunc.Tests
         public async Task GetReady()
         {
             var clientMock = new Mock<IPlayerHttpClient>();
-            clientMock.Setup(m => m.GetAsync("getReady?code=key", It.IsAny<TimeSpan>()));
+            clientMock.Setup(m => m.GetAsync("getReady?code=key", TimeSpan.FromMilliseconds(2345)));
+
+            var configMock = new Mock<IConfiguration>();
+            configMock.Setup(m => m["Timeouts:getReady"]).Returns("2345");
+            configMock.Setup(m => m["Timeouts:getShot"]).Returns("1234");
 
             var factoryMock = new Mock<IPlayerHttpClientFactory>();
             factoryMock.Setup(m => m.GetHttpClient("https://someApi.com")).Returns(clientMock.Object);
 
-            var client = new PlayerClient(factoryMock.Object);
+            var client = new PlayerClient(factoryMock.Object, configMock.Object);
             await client.GetReady("https://someApi.com", "key");
 
             factoryMock.VerifyAll();
@@ -53,11 +56,24 @@ namespace BattleshipContestFunc.Tests
                 Content = new StringContent("\"A1\"", Encoding.UTF8, "application/json")
             };
 
+            var configMock = new Mock<IConfiguration>();
+            configMock.Setup(m => m["Timeouts:getReady"]).Returns("2345");
+            configMock.Setup(m => m["Timeouts:getShot"]).Returns("1234");
+
             Expression<Func<HttpRequestMessage, bool>> check = message =>
                 message.RequestUri!.ToString() == "getShot?code=key"
                 && message.Method == HttpMethod.Post
                 && message.Content != null;
-            clientMock.Setup(m => m.SendAsync(It.Is(check), It.IsAny<TimeSpan>())).ReturnsAsync(response);
+            clientMock.Setup(m => m.SendAsync(It.Is(check), TimeSpan.FromMilliseconds(1234)))
+                .Callback<HttpRequestMessage, TimeSpan>((msg, to) =>
+                {
+                    var shotRequest = msg.Content!.ReadFromJsonAsync<ShotRequest>().Result;
+                    Assert.NotNull(shotRequest);
+                    Assert.NotNull(shotRequest!.Shots);
+                    Assert.Equal("A1", shotRequest!.LastShot);
+                    Assert.NotNull(shotRequest!.Board);
+                })
+                .ReturnsAsync(response);
 
             var factoryMock = new Mock<IPlayerHttpClientFactory>();
             factoryMock.Setup(m => m.GetHttpClient("https://someApi.com")).Returns(clientMock.Object);
@@ -67,7 +83,7 @@ namespace BattleshipContestFunc.Tests
             gameMock.SetupGet(m => m.LastShot).Returns(new BoardIndex());
             gameMock.SetupGet(m => m.ShootingBoard).Returns(new BoardContent());
 
-            var client = new PlayerClient(factoryMock.Object);
+            var client = new PlayerClient(factoryMock.Object, configMock.Object);
             var shot = await client.GetShot("https://someApi.com", gameMock.Object, "key");
 
             factoryMock.VerifyAll();

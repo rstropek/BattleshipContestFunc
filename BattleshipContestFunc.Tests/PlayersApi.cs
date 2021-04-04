@@ -34,9 +34,8 @@ namespace BattleshipContestFunc.Tests
             Mock<IAuthorize> authorize, Mock<IPlayerResultTable>? resultsMock = null)
         {
             return new BattleshipContestFunc.PlayersApi(playerMock.Object, config.Mapper,
-                config.JsonOptions, config.Serializer, authorize.Object, Mock.Of<IGameClient>(),
-                Mock.Of<IPlayerLogTable>(), resultsMock?.Object ?? Mock.Of<IPlayerResultTable>(),
-                Mock.Of<IPlayerGameLeaseManager>());
+                config.JsonOptions, config.Serializer, authorize.Object,
+                Mock.Of<IPlayerLogTable>(), resultsMock?.Object ?? Mock.Of<IPlayerResultTable>());
         }
 
         public static Mock<IPlayerResultTable> CreateEmptyResultTableMock()

@@ -15,6 +15,8 @@ namespace BattleshipContestFunc.Data
             RowKey = id.ToString();
         }
 
+        public Guid GetPlayerIdGuid() => Guid.Parse(RowKey);
+
         public string Name { get; set; } = string.Empty;
 
         public string WebApiUrl { get; set; } = string.Empty;

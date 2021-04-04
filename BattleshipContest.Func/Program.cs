@@ -36,6 +36,7 @@ namespace BattleshipContestFunc
                     services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(logger, false));
                     services.AddSingleton<IRepository, Repository>();
                     services.AddSingleton<IPlayerGameLeaseManager, PlayerGameLeaseManager>();
+                    services.AddSingleton<ISinglePlayerGameFactory, SinglePlayerGameFactory>();
                     services.AddSingleton<IPlayerTable, PlayerTable>();
                     services.AddSingleton<IPlayerLogTable, PlayerLogTable>();
                     services.AddSingleton<IUsersTable, UsersTable>();

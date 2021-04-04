@@ -17,8 +17,8 @@ namespace BattleshipContestFunc
     {
         private readonly IPlayerHttpClientFactory httpClientFactory;
         private readonly JsonSerializerOptions? jsonOptions;
-        private static TimeSpan getReadyTimeout = TimeSpan.FromSeconds(15);
-        private static TimeSpan getShotTimeout = TimeSpan.FromMilliseconds(500);
+        private static TimeSpan getReadyTimeout = TimeSpan.Zero;
+        private static TimeSpan getShotTimeout = TimeSpan.Zero;
 
         public PlayerClient(IPlayerHttpClientFactory httpClientFactory, IConfiguration? configuration = null, JsonSerializerOptions? jsonOptions = null)
         {
