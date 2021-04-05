@@ -48,11 +48,18 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.Get(It.IsAny<Expression<Func<Player, bool>>>()))
                 .Returns(Task.FromResult(payload));
 
+            var resultTableMock = new Mock<IPlayerResultTable>();
+            resultTableMock.Setup(t => t.Get(null)).ReturnsAsync(new List<PlayerResult>()
+            {
+                new(Guid.Empty) { LastMeasurement = new DateTime(2021, 4, 16), AvgNumberOfShots = 42d }
+            });
+
             var mock = RequestResponseMocker.Create();
-            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"), CreateEmptyResultTableMock()).Get(mock.RequestMock.Object);
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"), resultTableMock).Get(mock.RequestMock.Object);
             var resultPayload = JsonSerializer.Deserialize<List<PlayerGetDto>>(mock.ResponseBodyAsString, config.JsonOptions);
 
             playerMock.VerifyAll();
+            resultTableMock.VerifyAll();
             Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
             Assert.StartsWith("application/json", mock.Headers.First(h => h.Key == "Content-Type").Value.First());
             Assert.NotNull(resultPayload);
@@ -61,6 +68,8 @@ namespace BattleshipContestFunc.Tests
             Assert.Equal(payload[0].Name, resultPayload[0].Name);
             Assert.Equal(payload[0].WebApiUrl, resultPayload[0].WebApiUrl);
             Assert.Equal(payload[0].Creator, resultPayload[0].Creator);
+            Assert.Equal(new DateTime(2021, 4, 16), resultPayload[0].LastMeasurement);
+            Assert.Equal(42d, resultPayload[0].AvgNumberOfShots);
         }
 
         [Fact]

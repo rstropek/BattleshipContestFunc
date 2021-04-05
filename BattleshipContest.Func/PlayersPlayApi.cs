@@ -148,12 +148,12 @@ namespace BattleshipContestFunc
         public class PlayGameOutput
         {
             [ServiceBusOutput("MeasurePlayerTopic", EntityType.Topic)]
-            public string? Message { get; set; } = string.Empty;
+            public string? Message { get; set; }
 
             public HttpResponseData? HttpResponse { get; set; }
         }
 
-        private const int NumberOfGames = 25;
+        internal const int NumberOfGames = 25;
 
         [Function("AsyncPlayGame")]
         [ServiceBusOutput("MeasurePlayerTopic", EntityType.Topic)]
@@ -161,7 +161,7 @@ namespace BattleshipContestFunc
             [ServiceBusTrigger("MeasurePlayerTopic", "MeasurePlayerSubscription")] string sbMessage,
             FunctionContext context)
         {
-            var logger = context.GetLogger("AsyncGame");
+            var logger = context.GetLogger<PlayersPlayApi>();
             if (string.IsNullOrEmpty(sbMessage))
             {
                 logger.LogCritical("Received empty message");
@@ -186,7 +186,11 @@ namespace BattleshipContestFunc
             }
 
             var validationError = ValidateModel(message);
-            if (validationError != null) return null;
+            if (validationError != null)
+            {
+                logger.LogCritical($"Message {sbMessage} invalid");
+                return null;
+            }
 
             message = await RenewLease(message);
 
