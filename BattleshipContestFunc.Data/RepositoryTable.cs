@@ -38,7 +38,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<TTable?> Add(TTable item)
         {
-            if (partitionKey != null && !partitionKey.Equals(default) && item.PartitionKey != partitionKeyString)
+            if (partitionKey != null && !this.partitionKey.Equals(default) && item.PartitionKey != partitionKeyString)
             {
                 throw new InvalidPartitionKeyException($"Partition key of item to add/replace does not match specified partition key of table. " +
                     $"Specified partition key is {partitionKeyString}, item's partition key is {item.PartitionKey}. They have to be identical.");
@@ -52,7 +52,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<TTable?> Replace(TTable item)
         {
-            if (partitionKey != null && !partitionKey.Equals(default) && item.PartitionKey != partitionKeyString)
+            if (partitionKey != null && !this.partitionKey.Equals(default) && item.PartitionKey != partitionKeyString)
             {
                 throw new InvalidPartitionKeyException($"Partition key of item to add/replace does not match specified partition key of table. " +
                     $"Specified partition key is {partitionKeyString}, item's partition key is {item.PartitionKey}. They have to be identical.");
@@ -77,7 +77,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<IQueryable<TTable>> Get(TPartitionKey partitionKey)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !this.partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, selected partition key is {partitionKey}.");
@@ -100,7 +100,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<List<TTable>> Get(TPartitionKey partitionKey, Expression<Func<TTable, bool>>? predicate = null)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !this.partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, selected partition key is {partitionKey}.");
@@ -130,7 +130,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task<TTable?> GetSingle(TPartitionKey partitionKey, TRowKey rowKey)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !this.partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, selected partition key is {partitionKey}.");
@@ -160,7 +160,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task Delete(TPartitionKey partitionKey, TRowKey rowKey)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !this.partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, partition key for deletion is {partitionKey}.");
@@ -176,7 +176,7 @@ namespace BattleshipContestFunc.Data
 
         public async Task DeletePartition(TPartitionKey partitionKey)
         {
-            if (this.partitionKey != null && !partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
+            if (this.partitionKey != null && !this.partitionKey.Equals(default) && !partitionKey.Equals(this.partitionKey))
             {
                 logger.LogWarning($"Partition keys do not match. " +
                     $"Specified partition key is {partitionKeyString}, partition key for deletion is {partitionKey}.");

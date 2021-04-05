@@ -1,12 +1,10 @@
 using BattleshipContestFunc.Data;
-using Microsoft.Azure.Functions.Worker.Http;
 using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Net;
-using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
@@ -23,11 +21,13 @@ namespace BattleshipContestFunc.Tests
         }
 
         private BattleshipContestFunc.PlayersApi CreateApi(Mock<IPlayerTable> playerMock,
-            Mock<IAuthorize> authorize, Mock<IPlayerResultTable>? resultsMock = null)
+            Mock<IAuthorize> authorize, Mock<IPlayerResultTable>? resultsMock = null,
+            Mock<IPlayerLogTable>? logMock = null)
         {
             return new BattleshipContestFunc.PlayersApi(playerMock.Object, config.Mapper,
                 config.JsonOptions, config.Serializer, authorize.Object,
-                Mock.Of<IPlayerLogTable>(), resultsMock?.Object ?? Mock.Of<IPlayerResultTable>());
+                logMock?.Object ?? Mock.Of<IPlayerLogTable>(), 
+                resultsMock?.Object ?? Mock.Of<IPlayerResultTable>());
         }
 
         public static Mock<IPlayerResultTable> CreateEmptyResultTableMock()
@@ -433,6 +433,184 @@ namespace BattleshipContestFunc.Tests
 
             playerMock.VerifyAll();
             Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetLog()
+        {
+            var player = new Player(Guid.Empty) { Name = "Dummy", WebApiUrl = "https://somewhere.com/api", Creator = "foo" };
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(Guid.Empty)).ReturnsAsync(player);
+
+            var payload = new List<PlayerLog>
+            {
+                new(Guid.Empty) { RowKey = "2021-04-01 18:06:20Z-bb65abcf-bdc0-4b64-a5a7-a01c2033213e",
+                    LogMessage = "Foo", WebApiUrl = "https://foo.com" },
+                new(Guid.Empty) { RowKey = "2021-04-02 18:06:20Z-bb65abcf-bdc0-4b64-a5a7-a01c2033213e",
+                    LogMessage = "Bar", WebApiUrl = "https://bar.com" },
+            };
+            var playerLogMock = new Mock<IPlayerLogTable>();
+            playerLogMock.Setup(p => p.Get(Guid.Empty, null)).ReturnsAsync(payload);
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"), CreateEmptyResultTableMock(),
+                logMock: playerLogMock).GetPlayerLog(mock.RequestMock.Object, Guid.Empty.ToString());
+            var resultPayload = JsonSerializer.Deserialize<List<PlayerLogDto>>(mock.ResponseBodyAsString, config.JsonOptions);
+
+            playerMock.VerifyAll();
+            playerLogMock.VerifyAll();
+            Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
+            Assert.StartsWith("application/json", mock.Headers.First(h => h.Key == "Content-Type").Value.First());
+            Assert.NotNull(resultPayload);
+            Assert.Equal(2, resultPayload!.Count);
+            Assert.Equal(DateTime.Parse("2021-04-02 18:06:20Z"), resultPayload![0].Timestamp);
+            Assert.Equal(DateTime.Parse("2021-04-01 18:06:20Z"), resultPayload![1].Timestamp);
+            Assert.Equal("Bar", resultPayload![0].LogMessage);
+            Assert.Equal("Foo", resultPayload![1].LogMessage);
+        }
+
+        [Fact]
+        public async Task GetLogInvalidId()
+        {
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>()));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"))
+                .GetPlayerLog(mock.RequestMock.Object, "dummy");
+
+            playerMock.Verify(p => p.GetSingle(It.IsAny<Guid>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetLogNotFound()
+        {
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>()));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"))
+                .GetPlayerLog(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            playerMock.VerifyAll();
+            Assert.Equal(HttpStatusCode.NotFound, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetLogChecksAuthorization()
+        {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>()));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, authMock).GetPlayerLog(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            authMock.VerifyAll();
+            playerMock.Verify(p => p.GetSingle(It.IsAny<Guid>()), Times.Never);
+            Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetLogForeignPlayer()
+        {
+            var payload = new Player(Guid.Empty)
+            {
+                Name = "Dummy",
+                WebApiUrl = "https://somewhere.com/api",
+                Creator = "foo"
+            };
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>())).Returns(Task.FromResult<Player?>(payload));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo2")).GetPlayerLog(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            playerMock.VerifyAll();
+            Assert.Equal(HttpStatusCode.Forbidden, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task ClearLog()
+        {
+            var player = new Player(Guid.Empty) { Name = "Dummy", WebApiUrl = "https://somewhere.com/api", Creator = "foo" };
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(Guid.Empty)).ReturnsAsync(player);
+
+            var playerLogMock = new Mock<IPlayerLogTable>();
+            playerLogMock.Setup(p => p.DeletePartition(Guid.Empty));
+            playerLogMock.Setup(p => p.Add(It.IsAny<PlayerLog>()));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"), CreateEmptyResultTableMock(),
+                logMock: playerLogMock).ClearPlayerLog(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            playerMock.VerifyAll();
+            playerLogMock.VerifyAll();
+            Assert.Equal(HttpStatusCode.NoContent, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task ClearLogInvalidId()
+        {
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>()));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"))
+                .ClearPlayerLog(mock.RequestMock.Object, "dummy");
+
+            playerMock.Verify(p => p.GetSingle(It.IsAny<Guid>()), Times.Never);
+            Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task ClearLogNotFound()
+        {
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>()));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo"))
+                .ClearPlayerLog(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            playerMock.VerifyAll();
+            Assert.Equal(HttpStatusCode.NotFound, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task ClearLogChecksAuthorization()
+        {
+            var authMock = AuthorizeMocker.GetUnauthorizedMock();
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>()));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, authMock).ClearPlayerLog(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            authMock.VerifyAll();
+            playerMock.Verify(p => p.GetSingle(It.IsAny<Guid>()), Times.Never);
+            Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
+        }
+
+        [Fact]
+        public async Task ClearLogForeignPlayer()
+        {
+            var payload = new Player(Guid.Empty)
+            {
+                Name = "Dummy",
+                WebApiUrl = "https://somewhere.com/api",
+                Creator = "foo"
+            };
+            var playerMock = new Mock<IPlayerTable>();
+            playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>())).Returns(Task.FromResult<Player?>(payload));
+
+            var mock = RequestResponseMocker.Create();
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo2")).ClearPlayerLog(mock.RequestMock.Object, Guid.Empty.ToString());
+
+            playerMock.VerifyAll();
+            Assert.Equal(HttpStatusCode.Forbidden, mock.ResponseMock.Object.StatusCode);
         }
     }
 }

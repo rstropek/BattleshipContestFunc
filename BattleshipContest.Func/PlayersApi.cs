@@ -34,6 +34,14 @@ namespace BattleshipContestFunc
         [property: Required][property: AbsoluteUri][property: MinLength(1)] string WebApiUrl,
         string? ApiKey = null,
         [property: AbsoluteUri] string? GitHubUrl = null);
+    public record PlayerLogDto(
+        Guid PlayerId,
+        DateTime Timestamp,
+        Guid LogId,
+        string LogMessage,
+        string WebApiUrl,
+        DateTime? Started,
+        DateTime? Completed);
 
     public class PlayersApi : PlayersApiBase
     {
@@ -95,6 +103,41 @@ namespace BattleshipContestFunc
             if (player == null) return errorResponse!;
 
             return await CreateResponse(req, mapper.Map<Player, PlayerGetDto>(player));
+        }
+
+        [Function("GetPlayerLog")]
+        public async Task<HttpResponseData> GetPlayerLog(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "players/{idString}/log")] HttpRequestData req,
+            string idString)
+        {
+            // Verify authenticated user is present
+            var subject = await authorize.TryGetSubject(req.Headers);
+            if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
+
+            var (player, errorResponse) = await GetSingleOwning(req, idString, subject);
+            if (player == null) return errorResponse!;
+
+            var result = await playerLogTable.Get(player.GetPlayerIdGuid(), null);
+            return await CreateResponse(req, mapper.Map<List<PlayerLog>, List<PlayerLogDto>>(
+                result.OrderByDescending(l => l.RowKey).ToList()));
+        }
+
+        [Function("ClearPlayerLog")]
+        public async Task<HttpResponseData> ClearPlayerLog(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "players/{idString}/log/clear")] HttpRequestData req,
+            string idString)
+        {
+            // Verify authenticated user is present
+            var subject = await authorize.TryGetSubject(req.Headers);
+            if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
+
+            var (player, errorResponse) = await GetSingleOwning(req, idString, subject);
+            if (player == null) return errorResponse!;
+
+            await playerLogTable.DeletePartition(player.GetPlayerIdGuid());
+            await playerLogTable.Add(new(player.GetPlayerIdGuid(), "Log cleared"));
+
+            return req.CreateResponse(HttpStatusCode.NoContent);
         }
 
         [Function("Add")]
