@@ -1,5 +1,8 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -154,6 +157,7 @@ namespace BattleshipContestFunc
         }
 
         internal const int NumberOfGames = 25;
+        internal const int ParallelGames = 25;
 
         [Function("AsyncPlayGame")]
         [ServiceBusOutput("MeasurePlayerTopic", EntityType.Topic)]
@@ -195,16 +199,17 @@ namespace BattleshipContestFunc
             message = await RenewLease(message);
 
             var numberOfErrors = 0;
-            var numberOfShots = 0;
+            IEnumerable<int> numberOfShots;
             const int maxNumberOfErrors = 3;
             var gameLogEntry = await playerLogTable.Add(
-                new(message.PlayerId, message.WebApiUrl, $"Game {message.CompletedGameCount + 1}") { Started = DateTime.UtcNow });
+                new(message.PlayerId, message.WebApiUrl, $"Games {message.CompletedGameCount + 1}-{message.CompletedGameCount + ParallelGames}") { Started = DateTime.UtcNow });
             while (true)
             {
                 try
                 {
-                    numberOfShots = await gameClient.PlayGame(
+                    numberOfShots = await gameClient.PlaySimultaneousGames(
                         message.WebApiUrl,
+                        ParallelGames,
                         async () => { message = await RenewLease(message); },
                         message.ApiKey);
                     break;
@@ -225,12 +230,13 @@ namespace BattleshipContestFunc
             }
 
             gameLogEntry!.Completed = DateTime.UtcNow;
+            gameLogEntry!.LogMessage = $"Games {message.CompletedGameCount + 1}-{message.CompletedGameCount + ParallelGames} ({numberOfShots.Sum()} shots)";
             await playerLogTable.Replace(gameLogEntry);
 
             message = message with
             {
-                CompletedGameCount = message.CompletedGameCount + 1,
-                NumberOfShots = message.NumberOfShots + numberOfShots
+                CompletedGameCount = message.CompletedGameCount + ParallelGames,
+                NumberOfShots = message.NumberOfShots + numberOfShots.Sum()
             };
 
             if (message.CompletedGameCount == NumberOfGames)

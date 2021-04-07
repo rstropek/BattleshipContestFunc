@@ -445,9 +445,11 @@ namespace BattleshipContestFunc.Tests
             var payload = new List<PlayerLog>
             {
                 new(Guid.Empty) { RowKey = "2021-04-01 18:06:20Z-bb65abcf-bdc0-4b64-a5a7-a01c2033213e",
-                    LogMessage = "Foo", WebApiUrl = "https://foo.com" },
+                    LogMessage = "Foo", WebApiUrl = "https://foo.com",
+                    Timestamp = DateTimeOffset.Parse("2021-04-01 18:06:20Z") },
                 new(Guid.Empty) { RowKey = "2021-04-02 18:06:20Z-bb65abcf-bdc0-4b64-a5a7-a01c2033213e",
-                    LogMessage = "Bar", WebApiUrl = "https://bar.com" },
+                    LogMessage = "Bar", WebApiUrl = "https://bar.com",
+                    Timestamp = DateTimeOffset.Parse("2021-04-02 18:06:20Z") },
             };
             var playerLogMock = new Mock<IPlayerLogTable>();
             playerLogMock.Setup(p => p.Get(Guid.Empty, null)).ReturnsAsync(payload);

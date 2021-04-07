@@ -8,7 +8,7 @@ using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace BattleshipContestFunc
+namespace BattleshipContestFunc.Players
 {
     public class SequentialPlayerApi : ApiBase
     {
@@ -25,16 +25,22 @@ namespace BattleshipContestFunc
             return req.CreateResponse(HttpStatusCode.OK);
         }
 
-        [Function("GetShotSequentialPlayer")]
+        [Function("GetShotsSequentialPlayer")]
         public async Task<HttpResponseData> GetShot(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/sequential/getShot")] HttpRequestData req)
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/sequential/getShots")] HttpRequestData req)
         {
             using var reader = new StreamReader(req.Body);
             var bodyContent = await reader.ReadToEndAsync();
-            ShotRequest request = JsonSerializer.Deserialize<ShotRequest>(bodyContent, jsonOptions)!;
+            var request = JsonSerializer.Deserialize<ShotRequest[]>(bodyContent, jsonOptions)!;
+
+            var shots = new BoardIndex[request.Length];
+            for(var i = 0; i < request.Length; i++)
+            {
+                shots[i] = request[i].LastShot?.Next() ?? new BoardIndex("A1");
+            }
 
             var response = req.CreateResponse();
-            await response.WriteAsJsonAsync(request.LastShot?.Next() ?? new BoardIndex("A1"), jsonSerializer);
+            await response.WriteAsJsonAsync(shots, jsonSerializer);
             return response;
         }
     }

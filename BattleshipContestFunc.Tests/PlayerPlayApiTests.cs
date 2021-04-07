@@ -6,6 +6,7 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -322,7 +323,7 @@ namespace BattleshipContestFunc.Tests
             CreateFunctionContextMock(out var _, out var contextMock);
 
             var gameClientMock = new Mock<IGameClient>();
-            gameClientMock.Setup(m => m.PlayGame(It.IsAny<string>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
+            gameClientMock.Setup(m => m.PlaySimultaneousGames(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
                 .Throws(new Exception("dummy"));
 
             var message = CreateMessage(leaseTimeout: DateTime.UtcNow.AddSeconds(-1));
@@ -341,14 +342,14 @@ namespace BattleshipContestFunc.Tests
             Assert.Null(result);
         }
 
-        [Fact]
+        [Fact(Skip = "Currently, all games run in parallel")]
         public async Task AsyncGameSendNextMessage()
         {
             CreateFunctionContextMock(out var _, out var contextMock);
 
             var gameClientMock = new Mock<IGameClient>();
-            gameClientMock.Setup(m => m.PlayGame(It.IsAny<string>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
-                .ReturnsAsync(42);
+            gameClientMock.Setup(m => m.PlaySimultaneousGames(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
+                .ReturnsAsync(Enumerable.Range(0, PlayersPlayApi.ParallelGames).Select(_ => 42).ToArray());
 
             var logTableMock = new Mock<IPlayerLogTable>();
             logTableMock.Setup(m => m.Add(It.IsAny<PlayerLog>())).ReturnsAsync(new PlayerLog(Guid.Empty));
@@ -378,8 +379,8 @@ namespace BattleshipContestFunc.Tests
             CreateFunctionContextMock(out var _, out var contextMock);
 
             var gameClientMock = new Mock<IGameClient>();
-            gameClientMock.Setup(m => m.PlayGame(It.IsAny<string>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
-                .ReturnsAsync(42);
+            gameClientMock.Setup(m => m.PlaySimultaneousGames(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
+                .ReturnsAsync(Enumerable.Range(0, PlayersPlayApi.ParallelGames).Select(_ => 42).ToArray());
 
             var logTableMock = new Mock<IPlayerLogTable>();
             logTableMock.Setup(m => m.Add(It.IsAny<PlayerLog>())).ReturnsAsync(new PlayerLog(Guid.Empty));
@@ -387,11 +388,11 @@ namespace BattleshipContestFunc.Tests
 
             var resultTableMock = new Mock<IPlayerResultTable>();
             resultTableMock.Setup(m => m.GetSingle(Guid.Empty)).ReturnsAsync(new PlayerResult(Guid.Empty));
-            resultTableMock.Setup(m => m.Replace(It.Is<PlayerResult>(pr => pr.AvgNumberOfShots == 42d / PlayersPlayApi.NumberOfGames)))
+            resultTableMock.Setup(m => m.Replace(It.Is<PlayerResult>(pr => pr.AvgNumberOfShots == 42d * PlayersPlayApi.ParallelGames / PlayersPlayApi.NumberOfGames)))
                 .ReturnsAsync(new PlayerResult(Guid.Empty));
 
             var message = CreateMessage(leaseTimeout: DateTime.UtcNow.AddSeconds(-1), 
-                completedGameCount: PlayersPlayApi.NumberOfGames - 1);
+                completedGameCount: PlayersPlayApi.NumberOfGames - PlayersPlayApi.ParallelGames);
 
             var leaseManagerMock = new Mock<IPlayerGameLeaseManager>();
             leaseManagerMock.Setup(m => m.Renew(Guid.Empty, It.IsAny<string>()));

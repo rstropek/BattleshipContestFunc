@@ -36,6 +36,7 @@ namespace BattleshipContestFunc.Tests
             var configMock = new Mock<IConfiguration>();
             configMock.Setup(m => m["Timeouts:getReady"]).Returns("2345");
             configMock.Setup(m => m["Timeouts:getShot"]).Returns("1234");
+            configMock.Setup(m => m["Timeouts:getShots"]).Returns("3456");
 
             var factoryMock = new Mock<IPlayerHttpClientFactory>();
             factoryMock.Setup(m => m.GetHttpClient("https://someApi.com")).Returns(clientMock.Object);
@@ -59,6 +60,7 @@ namespace BattleshipContestFunc.Tests
             var configMock = new Mock<IConfiguration>();
             configMock.Setup(m => m["Timeouts:getReady"]).Returns("2345");
             configMock.Setup(m => m["Timeouts:getShot"]).Returns("1234");
+            configMock.Setup(m => m["Timeouts:getShots"]).Returns("3456");
 
             Expression<Func<HttpRequestMessage, bool>> check = message =>
                 message.RequestUri!.ToString() == "getShot?code=key"
@@ -69,7 +71,6 @@ namespace BattleshipContestFunc.Tests
                 {
                     var shotRequest = msg.Content!.ReadFromJsonAsync<ShotRequest>().Result;
                     Assert.NotNull(shotRequest);
-                    Assert.NotNull(shotRequest!.Shots);
                     Assert.Equal("A1", shotRequest!.LastShot);
                     Assert.NotNull(shotRequest!.Board);
                 })

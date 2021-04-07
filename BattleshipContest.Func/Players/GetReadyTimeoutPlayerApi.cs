@@ -5,7 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Threading.Tasks;
 
-namespace BattleshipContestFunc
+namespace BattleshipContestFunc.Players
 {
     public class GetReadyTimeoutPlayerApi
     {
@@ -20,10 +20,10 @@ namespace BattleshipContestFunc
             return req.CreateResponse(HttpStatusCode.OK);
         }
 
-        [Function("GetShotTimeoutPlayer1")]
+        [Function("GetShotsTimeoutPlayer1")]
         [SuppressMessage("Performance", "CA1822", Justification = "Just a demo player")]
         public HttpResponseData GetShot(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/timeout-getReady/getShot")] HttpRequestData req)
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/timeout-getReady/getShots")] HttpRequestData req)
             => req.CreateResponse(HttpStatusCode.InternalServerError);
     }
 }

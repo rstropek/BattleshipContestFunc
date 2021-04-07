@@ -1,5 +1,7 @@
 ﻿using NBattleshipCodingContest.Logic;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace BattleshipContestFunc
@@ -47,6 +49,23 @@ namespace BattleshipContestFunc
             }
 
             return game.NumberOfShots;
+        }
+
+        public async Task<IEnumerable<int>> PlaySimultaneousGames(string playerWebApiUrl, int parallelGames = 5, Func<Task>? postRoundCallback = null, string? apiKey = null)
+        {
+            var games = new ISinglePlayerGame[parallelGames];
+            for (var i = 0; i < parallelGames; i++) games[i] = gameFactory.Create(0);
+
+            var runningGames = games.ToArray();
+            while (runningGames.Length > 0)
+            {
+                var shots = await playerClient.GetShots(playerWebApiUrl, runningGames, apiKey);
+                for (var i = 0; i < runningGames.Length; i++) runningGames[i].Shoot(shots[i]);
+                runningGames = runningGames.Where(g => g.GetGameState(BattleshipBoard.Ships) == SinglePlayerGameState.InProgress).ToArray();
+                if (postRoundCallback != null) await postRoundCallback();
+            }
+
+            return games.Select(g => g.NumberOfShots).ToArray();
         }
     }
 }

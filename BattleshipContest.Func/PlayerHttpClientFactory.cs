@@ -14,6 +14,7 @@ namespace BattleshipContestFunc
             if (!playerHttpClients.ContainsKey(canonicalizedBaseUrl))
             {
                 var client = new HttpClient { BaseAddress = new Uri(canonicalizedBaseUrl, UriKind.Absolute) };
+                client.DefaultRequestHeaders.Connection.Add("keep-alive");
                 var playerClient = new PlayerHttpClient(client);
                 return playerHttpClients.GetOrAdd(canonicalizedBaseUrl, playerClient);
             }

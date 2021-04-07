@@ -119,7 +119,7 @@ namespace BattleshipContestFunc
 
             var result = await playerLogTable.Get(player.GetPlayerIdGuid(), null);
             return await CreateResponse(req, mapper.Map<List<PlayerLog>, List<PlayerLogDto>>(
-                result.OrderByDescending(l => l.RowKey).ToList()));
+                result.OrderByDescending(l => l.Timestamp).ToList()));
         }
 
         [Function("ClearPlayerLog")]

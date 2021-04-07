@@ -21,7 +21,7 @@ namespace BattleshipContestFunc.Tests
         {
             var mock = RequestResponseMocker.Create();
 
-            var api = new BattleshipContestFunc.RandomPlayerApi(config.JsonOptions, config.Serializer);
+            var api = new Players.RandomPlayerApi(config.JsonOptions, config.Serializer);
             api.GetReady(mock.RequestMock.Object);
 
             Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
@@ -31,21 +31,24 @@ namespace BattleshipContestFunc.Tests
         public async Task GetShotInvalidBody()
         {
             var mock = RequestResponseMocker.Create("dummy {");
-            var api = new BattleshipContestFunc.RandomPlayerApi(config.JsonOptions, config.Serializer);
-            await api.GetShot(mock.RequestMock.Object);
+            var api = new Players.RandomPlayerApi(config.JsonOptions, config.Serializer);
+            await api.GetShots(mock.RequestMock.Object);
 
             Assert.Equal(HttpStatusCode.BadRequest, mock.ResponseMock.Object.StatusCode);
         }
 
         [Fact]
-        public async Task GetShot()
+        public async Task GetShots()
         {
-            var shotRequest = new ShotRequest(new List<SinglePlayerGameLogRecord>(), null, new BoardContent().ToShortString());
-            var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(shotRequest, config.JsonOptions));
-            var api = new BattleshipContestFunc.RandomPlayerApi(config.JsonOptions, config.Serializer);
-            await api.GetShot(mock.RequestMock.Object);
+            var shotRequests = new[]
+            {
+                new ShotRequest(null, new BoardContent().ToShortString())
+            };
+            var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(shotRequests, config.JsonOptions));
+            var api = new Players.RandomPlayerApi(config.JsonOptions, config.Serializer);
+            await api.GetShots(mock.RequestMock.Object);
             
-            JsonSerializer.Deserialize<BoardIndex>(mock.ResponseBodyAsString, config.JsonOptions);
+            JsonSerializer.Deserialize<BoardIndex[]>(mock.ResponseBodyAsString, config.JsonOptions);
             Assert.Equal(HttpStatusCode.OK, mock.ResponseMock.Object.StatusCode);
         }
     }

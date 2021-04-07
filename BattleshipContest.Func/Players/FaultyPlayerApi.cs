@@ -7,7 +7,7 @@ using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace BattleshipContestFunc
+namespace BattleshipContestFunc.Players
 {
     public class FaultyPlayerApi : ApiBase
     {
@@ -24,12 +24,12 @@ namespace BattleshipContestFunc
             return req.CreateResponse(HttpStatusCode.OK);
         }
 
-        [Function("GetShotFaultyPlayer")]
-        public async Task<HttpResponseData> GetShot(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/faulty/getShot")] HttpRequestData req)
+        [Function("GetShotsFaultyPlayer")]
+        public async Task<HttpResponseData> GetShots(
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/faulty/getShots")] HttpRequestData req)
         {
             var errorResponse = req.CreateResponse();
-            await errorResponse.WriteAsJsonAsync("This is a random error\nfrom faulty player.");
+            await errorResponse.WriteAsJsonAsync("This is an error\nfrom faulty player.");
             errorResponse.StatusCode = HttpStatusCode.InternalServerError;
             return errorResponse;
         }
