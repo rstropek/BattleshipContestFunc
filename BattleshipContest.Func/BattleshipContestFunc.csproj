@@ -26,6 +26,7 @@
     </ItemGroup>
     <ItemGroup>
       <ProjectReference Include="..\BattleshipContestFunc.Data\BattleshipContestFunc.Data.csproj" />
+      <ProjectReference Include="..\BattleshipContestFunc.GameLogic\BattleshipContestFunc.GameLogic.csproj" />
     </ItemGroup>
     <ItemGroup>
         <None Update="appsettings.json">
