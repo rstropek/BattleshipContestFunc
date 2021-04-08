@@ -1,11 +1,10 @@
 ﻿using Azure;
 using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
@@ -26,14 +25,16 @@ namespace BattleshipContestFunc.Tests
         private PlayersPlayApi CreateApi(Mock<IPlayerTable> playerMock,
             Mock<IAuthorize> authorize, Mock<IPlayerResultTable>? resultsMock = null,
             Mock<IGameClient>? gameClientMock = null, Mock<IPlayerGameLeaseManager>? leaseManager = null,
-            Mock<IPlayerLogTable>? logMock = null)
+            Mock<IPlayerLogTable>? logMock = null, Mock<IMessageSender>? messageSender = null)
         {
             return new PlayersPlayApi(playerMock.Object,
                 config.JsonOptions, config.Serializer, authorize.Object,
                 gameClientMock?.Object ?? Mock.Of<IGameClient>(),
                 logMock?.Object ?? Mock.Of<IPlayerLogTable>(),
                 resultsMock?.Object ?? Mock.Of<IPlayerResultTable>(),
-                leaseManager?.Object ?? Mock.Of<IPlayerGameLeaseManager>());
+                leaseManager?.Object ?? Mock.Of<IPlayerGameLeaseManager>(),
+                Mock.Of<IConfiguration>(),
+                messageSender?.Object ?? Mock.Of<IMessageSender>());
         }
 
         [Fact]
@@ -121,12 +122,10 @@ namespace BattleshipContestFunc.Tests
         {
             var authMock = AuthorizeMocker.GetUnauthorizedMock();
             var mock = RequestResponseMocker.Create();
-            var result = await CreateApi(new Mock<IPlayerTable>(), authMock).Play(mock.RequestMock.Object, Guid.Empty.ToString());
+            await CreateApi(new Mock<IPlayerTable>(), authMock).Play(mock.RequestMock.Object, Guid.Empty.ToString());
 
             authMock.VerifyAll();
             Assert.Equal(HttpStatusCode.Unauthorized, mock.ResponseMock.Object.StatusCode);
-            Assert.Equal(mock.ResponseMock.Object, result.HttpResponse);
-            Assert.Null(result.Message);
         }
 
         [Fact]
@@ -142,13 +141,11 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(p => p.GetSingle(It.IsAny<Guid>())).Returns(Task.FromResult<Player?>(payload));
 
             var mock = RequestResponseMocker.Create();
-            var result = await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo2"))
+            await CreateApi(playerMock, AuthorizeMocker.GetAuthorizeMock("foo2"))
                 .Play(mock.RequestMock.Object, Guid.Empty.ToString());
 
             playerMock.VerifyAll();
             Assert.Equal(HttpStatusCode.Forbidden, mock.ResponseMock.Object.StatusCode);
-            Assert.Equal(mock.ResponseMock.Object, result.HttpResponse);
-            Assert.Null(result.Message);
         }
 
         [Fact]
@@ -161,13 +158,11 @@ namespace BattleshipContestFunc.Tests
             var playerMock = CreatePlayerTable();
             var authMock = AuthorizeMocker.GetAuthorizeMock("foo");
             var mock = RequestResponseMocker.Create();
-            var result = await CreateApi(playerMock, authMock, gameClientMock: gameClientMock).Play(mock.RequestMock.Object, Guid.Empty.ToString());
+            await CreateApi(playerMock, authMock, gameClientMock: gameClientMock).Play(mock.RequestMock.Object, Guid.Empty.ToString());
 
             gameClientMock.VerifyAll();
             playerMock.VerifyAll();
             Assert.Equal(HttpStatusCode.FailedDependency, mock.ResponseMock.Object.StatusCode);
-            Assert.Equal(mock.ResponseMock.Object, result.HttpResponse);
-            Assert.Null(result.Message);
         }
 
         [Fact]
@@ -180,13 +175,11 @@ namespace BattleshipContestFunc.Tests
             var playerMock = CreatePlayerTable();
             var authMock = AuthorizeMocker.GetAuthorizeMock("foo");
             var mock = RequestResponseMocker.Create();
-            var result = await CreateApi(playerMock, authMock, leaseManager: leaseManagerMock)
+            await CreateApi(playerMock, authMock, leaseManager: leaseManagerMock)
                 .Play(mock.RequestMock.Object, Guid.Empty.ToString());
 
             leaseManagerMock.VerifyAll();
             Assert.Equal(HttpStatusCode.Conflict, mock.ResponseMock.Object.StatusCode);
-            Assert.Equal(mock.ResponseMock.Object, result.HttpResponse);
-            Assert.Null(result.Message);
         }
 
         [Fact]
@@ -198,21 +191,21 @@ namespace BattleshipContestFunc.Tests
             var logTableMock = new Mock<IPlayerLogTable>();
             logTableMock.Setup(m => m.Add(It.IsAny<PlayerLog>())).ReturnsAsync(new PlayerLog(Guid.Empty));
 
+            var senderMock = new Mock<IMessageSender>();
+            senderMock.Setup(m => m.SendMessage(
+                It.IsAny<PlayersPlayApi.MeasurePlayerRequestMessage>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<TimeSpan>()));
+
             var playerMock = CreatePlayerTable();
             var authMock = AuthorizeMocker.GetAuthorizeMock("foo");
             var mock = RequestResponseMocker.Create();
-            var result = await CreateApi(playerMock, authMock, leaseManager: leaseManagerMock, logMock: logTableMock)
+            var result = await CreateApi(playerMock, authMock, leaseManager: leaseManagerMock, 
+                logMock: logTableMock, messageSender: senderMock)
                 .Play(mock.RequestMock.Object, Guid.Empty.ToString());
 
             leaseManagerMock.VerifyAll();
+            senderMock.VerifyAll();
             Assert.Equal(HttpStatusCode.Accepted, mock.ResponseMock.Object.StatusCode);
-            Assert.Equal(mock.ResponseMock.Object, result.HttpResponse);
-            Assert.NotNull(result.Message);
-
-            var message = JsonSerializer.Deserialize<PlayersPlayApi.MeasurePlayerRequestMessage>(result.Message!, config.JsonOptions);
-            Assert.NotNull(message);
-            var context = new ValidationContext(message!);
-            Assert.True(Validator.TryValidateObject(message!, context, new List<ValidationResult>(), true));
         }
 
         [Fact]
@@ -273,7 +266,8 @@ namespace BattleshipContestFunc.Tests
             return JsonSerializer.Serialize(message, config.JsonOptions);
         }
 
-        private static void CreateFunctionContextMock(out Mock<ILogger<PlayersPlayApi>> loggerMock, out Mock<FunctionContext> contextMock)
+        private static void CreateFunctionContextMock(out Mock<ILogger<PlayersPlayApi>> loggerMock, 
+            out Mock<FunctionContext> contextMock, out Mock<IMessageSender> senderMock)
         {
             loggerMock = new Mock<ILogger<PlayersPlayApi>>();
             loggerMock.Setup(m => m.Log(
@@ -288,39 +282,51 @@ namespace BattleshipContestFunc.Tests
 
             contextMock = new Mock<FunctionContext>();
             contextMock.SetupGet(m => m.InstanceServices).Returns(servicesMock.Object);
+
+            senderMock = new Mock<IMessageSender>();
+            senderMock.Setup(m => m.SendMessage(
+                It.IsAny<PlayersPlayApi.MeasurePlayerRequestMessage>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<TimeSpan>()));
+        }
+
+        private static void VerifySendMessageNotCalled(Mock<IMessageSender> senderMock)
+        {
+            senderMock.Verify(m => m.SendMessage(
+                It.IsAny<PlayersPlayApi.MeasurePlayerRequestMessage>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<TimeSpan>()), Times.Never);
         }
 
         [Fact]
         public async Task AsyncGameInvalidMessage()
         {
-            CreateFunctionContextMock(out var loggerMock, out var contextMock);
+            CreateFunctionContextMock(out var loggerMock, out var contextMock, out var senderMock);
 
             var playerMock = CreatePlayerTable();
             var authMock = AuthorizeMocker.GetAuthorizeMock("foo");
-            var result = await CreateApi(playerMock, authMock).AsyncGame("dummy {", contextMock.Object);
+            await CreateApi(playerMock, authMock).AsyncGame("dummy {", contextMock.Object);
 
             loggerMock.VerifyAll();
-            Assert.Null(result);
+            VerifySendMessageNotCalled(senderMock);
         }
 
         [Fact]
         public async Task AsyncGameModelValidationError()
         {
-            CreateFunctionContextMock(out var loggerMock, out var contextMock);
+            CreateFunctionContextMock(out var loggerMock, out var contextMock, out var senderMock);
 
             var playerMock = CreatePlayerTable();
             var authMock = AuthorizeMocker.GetAuthorizeMock("foo");
             var message = CreateMessage("dummy");
-            var result = await CreateApi(playerMock, authMock).AsyncGame(message, contextMock.Object);
+            await CreateApi(playerMock, authMock).AsyncGame(message, contextMock.Object);
 
             loggerMock.VerifyAll();
-            Assert.Null(result);
+            VerifySendMessageNotCalled(senderMock);
         }
 
         [Fact]
         public async Task AsyncGameHandlesLease()
         {
-            CreateFunctionContextMock(out var _, out var contextMock);
+            CreateFunctionContextMock(out var _, out var contextMock, out var senderMock);
 
             var gameClientMock = new Mock<IGameClient>();
             gameClientMock.Setup(m => m.PlaySimultaneousGames(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
@@ -334,18 +340,18 @@ namespace BattleshipContestFunc.Tests
 
             var playerMock = CreatePlayerTable();
             var authMock = AuthorizeMocker.GetAuthorizeMock("foo");
-            var result = await CreateApi(playerMock, authMock, gameClientMock: gameClientMock, leaseManager: leaseManagerMock)
+            await CreateApi(playerMock, authMock, gameClientMock: gameClientMock, leaseManager: leaseManagerMock)
                 .AsyncGame(message, contextMock.Object);
 
             leaseManagerMock.VerifyAll();
             gameClientMock.VerifyAll();
-            Assert.Null(result);
+            VerifySendMessageNotCalled(senderMock);
         }
 
         [Fact(Skip = "Currently, all games run in parallel")]
         public async Task AsyncGameSendNextMessage()
         {
-            CreateFunctionContextMock(out var _, out var contextMock);
+            CreateFunctionContextMock(out var _, out var contextMock, out var senderMock);
 
             var gameClientMock = new Mock<IGameClient>();
             gameClientMock.Setup(m => m.PlaySimultaneousGames(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
@@ -362,7 +368,7 @@ namespace BattleshipContestFunc.Tests
 
             var playerMock = CreatePlayerTable();
             var authMock = AuthorizeMocker.GetAuthorizeMock("foo");
-            var result = await CreateApi(playerMock, authMock, gameClientMock: gameClientMock, 
+            await CreateApi(playerMock, authMock, gameClientMock: gameClientMock, 
                 leaseManager: leaseManagerMock, logMock: logTableMock)
                 .AsyncGame(message, contextMock.Object);
 
@@ -370,13 +376,13 @@ namespace BattleshipContestFunc.Tests
             leaseManagerMock.Verify(m => m.Release(Guid.Empty, It.IsAny<string>()), Times.Never);
             gameClientMock.VerifyAll();
             logTableMock.VerifyAll();
-            Assert.NotNull(result);
+            VerifySendMessageNotCalled(senderMock);
         }
 
         [Fact]
         public async Task AsyncGameWritesResult()
         {
-            CreateFunctionContextMock(out var _, out var contextMock);
+            CreateFunctionContextMock(out var _, out var contextMock, out var senderMock);
 
             var gameClientMock = new Mock<IGameClient>();
             gameClientMock.Setup(m => m.PlaySimultaneousGames(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Func<Task>>(), It.IsAny<string>()))
@@ -402,7 +408,7 @@ namespace BattleshipContestFunc.Tests
             playerMock.Setup(m => m.Replace(It.Is<Player>(p => p.TournamentInProgressSince == null)));
 
             var authMock = AuthorizeMocker.GetAuthorizeMock("foo");
-            var result = await CreateApi(playerMock, authMock, gameClientMock: gameClientMock,
+            await CreateApi(playerMock, authMock, gameClientMock: gameClientMock,
                 leaseManager: leaseManagerMock, logMock: logTableMock, resultsMock: resultTableMock)
                 .AsyncGame(message, contextMock.Object);
 
@@ -411,7 +417,7 @@ namespace BattleshipContestFunc.Tests
             logTableMock.VerifyAll();
             resultTableMock.VerifyAll();
             playerMock.VerifyAll();
-            Assert.Null(result);
+            VerifySendMessageNotCalled(senderMock);
         }
     }
 }

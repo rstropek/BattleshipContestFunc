@@ -45,6 +45,7 @@ namespace BattleshipContestFunc
                     services.AddSingleton<IPlayerClient, PlayerClient>();
                     services.AddSingleton<IGameClient, GameClient>();
                     services.AddSingleton<IBoardFiller, RandomBoardFiller>();
+                    services.AddSingleton<IMessageSender, MessageSender>();
                     services.AddAutoMapper(typeof(MappingProfile));
                     var jsonOptions = new JsonSerializerOptions
                     {

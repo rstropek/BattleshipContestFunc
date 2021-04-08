@@ -1,17 +1,16 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
-using AutoMapper;
 using Azure;
 using Azure.Core.Serialization;
 using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace BattleshipContestFunc
@@ -23,10 +22,14 @@ namespace BattleshipContestFunc
         private readonly IPlayerLogTable playerLogTable;
         private readonly IPlayerResultTable playerResultTable;
         private readonly IPlayerGameLeaseManager playerGameLease;
+        private readonly IMessageSender messageSender;
+        private static string? serviceBusConnectionString;
 
         public PlayersPlayApi(IPlayerTable playerTable, JsonSerializerOptions jsonOptions,
             JsonObjectSerializer jsonSerializer, IAuthorize authorize, IGameClient gameClient,
-            IPlayerLogTable playerLogTable, IPlayerResultTable playerResultTable, IPlayerGameLeaseManager playerGameLease)
+            IPlayerLogTable playerLogTable, IPlayerResultTable playerResultTable, 
+            IPlayerGameLeaseManager playerGameLease, IConfiguration configuration,
+            IMessageSender messageSender)
             : base(playerTable, jsonOptions, jsonSerializer)
         {
             this.authorize = authorize;
@@ -34,6 +37,12 @@ namespace BattleshipContestFunc
             this.playerLogTable = playerLogTable;
             this.playerResultTable = playerResultTable;
             this.playerGameLease = playerGameLease;
+            this.messageSender = messageSender;
+
+            if (serviceBusConnectionString == null)
+            {
+                serviceBusConnectionString = configuration["AzureWebJobsServiceBus"];
+            }
         }
 
         [Function("TestPlayer")]
@@ -91,17 +100,19 @@ namespace BattleshipContestFunc
             return message;
         }
 
+        private const string TopicName = "MeasurePlayerTopic";
+
         [Function("PlayGame")]
-        public async Task<PlayGameOutput> Play(
+        public async Task<HttpResponseData> Play(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "players/{idString}/play")] HttpRequestData req,
             string idString)
         {
             // Verify authenticated user is present
             var subject = await authorize.TryGetSubject(req.Headers);
-            if (subject == null) return new PlayGameOutput() { HttpResponse = req.CreateResponse(HttpStatusCode.Unauthorized) }; ;
+            if (subject == null) return req.CreateResponse(HttpStatusCode.Unauthorized);
 
             var (player, errorResponse) = await GetSingleOwning(req, idString, subject);
-            if (player == null) return new PlayGameOutput() { HttpResponse = errorResponse };
+            if (player == null) return errorResponse!;
             var playerId = player.GetPlayerIdGuid();
 
             try
@@ -113,11 +124,7 @@ namespace BattleshipContestFunc
             {
                 var errorMessage = ex.GetFullDescription();
                 await playerLogTable.AddException(playerId, player.WebApiUrl, errorMessage);
-                return new PlayGameOutput
-                {
-                    Message = null,
-                    HttpResponse = await CreateDependencyError(req, $"Player not ready\n{errorMessage}")
-                };
+                return await CreateDependencyError(req, $"Player not ready\n{errorMessage}");
             }
 
             string leaseId;
@@ -127,11 +134,7 @@ namespace BattleshipContestFunc
             }
             catch (RequestFailedException)
             {
-                return new PlayGameOutput
-                {
-                    Message = null,
-                    HttpResponse = await CreateConflictError(req, "Game already in progress")
-                };
+                return await CreateConflictError(req, "Game already in progress"); 
             }
 
             var startedEntry = await playerLogTable.Add(
@@ -141,35 +144,25 @@ namespace BattleshipContestFunc
 
             var message = new MeasurePlayerRequestMessage(playerId, leaseId, GetLeaseEnd(),
                 player.WebApiUrl, player.ApiKey, player.Name, startedEntry!.RowKey);
-            return new PlayGameOutput
-            {
-                Message = JsonSerializer.Serialize(message, jsonOptions),
-                HttpResponse = req.CreateResponse(HttpStatusCode.Accepted)
-            };
-        }
+            await messageSender.SendMessage(message, serviceBusConnectionString!, 
+                TopicName, TimeSpan.FromMinutes(1));
 
-        public class PlayGameOutput
-        {
-            [ServiceBusOutput("MeasurePlayerTopic", EntityType.Topic)]
-            public string? Message { get; set; }
-
-            public HttpResponseData? HttpResponse { get; set; }
+            return req.CreateResponse(HttpStatusCode.Accepted);
         }
 
         internal const int NumberOfGames = 25;
         internal const int ParallelGames = 25;
 
         [Function("AsyncPlayGame")]
-        [ServiceBusOutput("MeasurePlayerTopic", EntityType.Topic)]
-        public async Task<string?> AsyncGame(
-            [ServiceBusTrigger("MeasurePlayerTopic", "MeasurePlayerSubscription")] string sbMessage,
+        public async Task AsyncGame(
+            [ServiceBusTrigger(TopicName, "MeasurePlayerSubscription")] string sbMessage,
             FunctionContext context)
         {
             var logger = context.GetLogger<PlayersPlayApi>();
             if (string.IsNullOrEmpty(sbMessage))
             {
                 logger.LogCritical("Received empty message");
-                return null;
+                return;
             }
 
             MeasurePlayerRequestMessage? message;
@@ -180,20 +173,20 @@ namespace BattleshipContestFunc
             catch (JsonException ex)
             {
                 logger.LogCritical($"Cloud not parse message {sbMessage}: {ex.Message}");
-                return null;
+                return;
             }
 
             if (message == null)
             {
                 logger.LogCritical($"Message {sbMessage} empty after deserialization");
-                return null;
+                return;
             }
 
             var validationError = ValidateModel(message);
             if (validationError != null)
             {
                 logger.LogCritical($"Message {sbMessage} invalid");
-                return null;
+                return;
             }
 
             message = await RenewLease(message);
@@ -224,7 +217,7 @@ namespace BattleshipContestFunc
                     {
                         await playerLogTable.Add(new(message.PlayerId, "Too many errors, stopping tournament"));
                         await playerGameLease.Release(message.PlayerId, message.LeaseId);
-                        return null;
+                        return;
                     }
                 }
             }
@@ -271,11 +264,12 @@ namespace BattleshipContestFunc
                 }
 
                 await playerGameLease.Release(message.PlayerId, message.LeaseId);
-                return null;
+                return;
             }
 
             message = await RenewLease(message, true);
-            return JsonSerializer.Serialize(message, jsonOptions);
+            await messageSender.SendMessage(message, serviceBusConnectionString!,
+                TopicName, TimeSpan.FromMinutes(1));
         }
     }
 }
