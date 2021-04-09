@@ -19,6 +19,7 @@ namespace BattleshipContestFunc
         string WebApiUrl, 
         string Creator, 
         bool HasApiKey,
+        bool NeedsThrottling,
         DateTime? LastMeasurement,
         double? AvgNumberOfShots,
         string? GitHubUrl,
@@ -27,13 +28,15 @@ namespace BattleshipContestFunc
         string? Name = null,
         [property: AbsoluteUri] string? WebApiUrl = null,
         string? ApiKey = null,
-        [property: AbsoluteUri] string? GitHubUrl = null);
+        [property: AbsoluteUri] string? GitHubUrl = null,
+        bool? NeedsThrottling = null);
     public record PlayerAddDto(
         Guid Id,
         [property: Required][property: MinLength(1)] string Name,
         [property: Required][property: AbsoluteUri][property: MinLength(1)] string WebApiUrl,
         string? ApiKey = null,
-        [property: AbsoluteUri] string? GitHubUrl = null);
+        [property: AbsoluteUri] string? GitHubUrl = null,
+        bool? NeedsThrottling = null);
     public record PlayerLogDto(
         Guid PlayerId,
         DateTime Timestamp,
@@ -200,6 +203,12 @@ namespace BattleshipContestFunc
             if (player.WebApiUrl != null && player.WebApiUrl != entity.WebApiUrl)
             {
                 entity.WebApiUrl = player.WebApiUrl;
+                update = true;
+            }
+
+            if (player.NeedsThrottling != null && player.NeedsThrottling != entity.NeedsThrottling)
+            {
+                entity.NeedsThrottling = player.NeedsThrottling;
                 update = true;
             }
 

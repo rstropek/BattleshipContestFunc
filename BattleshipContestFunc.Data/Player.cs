@@ -28,5 +28,7 @@ namespace BattleshipContestFunc.Data
         public string? GitHubUrl { get; set; }
 
         public DateTime? TournamentInProgressSince { get; set; }
+
+        public bool? NeedsThrottling { get; set; }
     }
 }

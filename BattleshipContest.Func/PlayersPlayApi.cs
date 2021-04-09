@@ -83,7 +83,8 @@ namespace BattleshipContestFunc
             [property: Required][property: MinLength(1)] string PlayerName,
             [property: Required][property: MinLength(1)] string TournamentStartedLogRowKey,
             [property: Required] IEnumerable<SinglePlayerGame> Games,
-            int NumberOfShots = 0);
+            int NumberOfShots = 0,
+            bool NeedsThrottling = false);
 
         private static readonly TimeSpan LeaseBuffer = TimeSpan.FromSeconds(20);
         private static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(60);
@@ -145,7 +146,8 @@ namespace BattleshipContestFunc
 
             var games = gameClient.CreateTournamentGames(NumberOfGames);
             var message = new MeasurePlayerRequestMessage(playerId, leaseId, GetLeaseEnd(),
-                player.WebApiUrl, player.ApiKey, player.Name, startedEntry!.RowKey, games);
+                player.WebApiUrl, player.ApiKey, player.Name, startedEntry!.RowKey, games,
+                NeedsThrottling: player.NeedsThrottling ?? false);
             await messageSender.SendMessage(message, serviceBusConnectionString!, TopicName);
 
             return req.CreateResponse(HttpStatusCode.Accepted);
@@ -259,7 +261,8 @@ namespace BattleshipContestFunc
             }
 
             message = await RenewLease(message, true);
-            await messageSender.SendMessage(message, serviceBusConnectionString!, TopicName, Delay);
+            await messageSender.SendMessage(message, serviceBusConnectionString!, TopicName, 
+                message.NeedsThrottling ? Delay : null);
         }
     }
 }
