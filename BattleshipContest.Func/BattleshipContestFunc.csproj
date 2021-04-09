@@ -19,7 +19,7 @@
         <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="1.0.0" />
         <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="6.9.0" />
         <PackageReference Include="Microsoft.Net.Http.Headers" Version="2.2.8" />
-        <PackageReference Include="NBattleshipCodingContest.Logic" Version="0.6.0-alpha" />
+        <PackageReference Include="NBattleshipCodingContest.Logic" Version="0.7.0-alpha" />
         <PackageReference Include="Serilog" Version="2.10.0" />
         <PackageReference Include="Serilog.Extensions.Logging" Version="3.0.1" />
         <PackageReference Include="Serilog.Settings.Configuration" Version="3.1.0" />

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NBattleshipCodingContest.Logic;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -10,7 +11,10 @@ namespace BattleshipContestFunc
 
         Task<int> PlayGame(string playerWebApiUrl, Func<Task>? postRoundCallback = null, string? apiKey = null);
 
-        Task<IEnumerable<int>> PlaySimultaneousGames(string playerWebApiUrl, int parallelGames = 5, Func<Task>? postRoundCallback = null, string? apiKey = null);
+        IEnumerable<SinglePlayerGame> CreateTournamentGames(int numberOfGames);
+
+        Task PlaySimultaneousGames(string playerWebApiUrl, IEnumerable<SinglePlayerGame> games,
+            int maximumShots, Func<Task>? postRoundCallback = null, string? apiKey = null, int[] ? ships = null);
 
         Task PlaySingleMoveInRandomGame(string playerWebApiUrl, string? apiKey = null);
     }

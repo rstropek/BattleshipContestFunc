@@ -54,21 +54,33 @@ namespace BattleshipContestFunc
             return game.NumberOfShots;
         }
 
-        public async Task<IEnumerable<int>> PlaySimultaneousGames(string playerWebApiUrl, int parallelGames = 5, Func<Task>? postRoundCallback = null, string? apiKey = null)
+        public IEnumerable<SinglePlayerGame> CreateTournamentGames(int numberOfGames)
         {
-            var games = new ISinglePlayerGame[parallelGames];
-            for (var i = 0; i < parallelGames; i++) games[i] = gameFactory.Create(0);
-
-            var runningGames = games.ToArray();
-            while (runningGames.Length > 0)
+            var result = new SinglePlayerGame[numberOfGames];
+            for (var i = 0; i < numberOfGames; i++)
             {
-                var shots = await playerClient.GetShots(playerWebApiUrl, runningGames, apiKey);
-                for (var i = 0; i < runningGames.Length; i++) runningGames[i].Shoot(shots[i]);
-                runningGames = runningGames.Where(g => g.GetGameState(BattleshipBoard.Ships) == SinglePlayerGameState.InProgress).ToArray();
-                if (postRoundCallback != null) await postRoundCallback();
+                result[i] = (SinglePlayerGame)gameFactory.Create(0);
             }
 
-            return games.Select(g => g.NumberOfShots).ToArray();
+            return result;
+        }
+
+        public async Task PlaySimultaneousGames(string playerWebApiUrl, IEnumerable<SinglePlayerGame> games,
+            int maximumShots, Func<Task>? postRoundCallback = null, string? apiKey = null,
+            int[]? ships = null)
+        {
+            for (var shot = 0; shot < maximumShots; shot++)
+            {
+                var runningGames = games
+                    .Where(g => g.GetGameState(ships ?? BattleshipBoard.Ships) == SinglePlayerGameState.InProgress)
+                    .ToList();
+                if (runningGames.Count == 0) break;
+
+                var shots = await playerClient.GetShots(playerWebApiUrl, runningGames, apiKey);
+                for (var i = 0; i < runningGames.Count; i++) runningGames[i].Shoot(shots[i]);
+
+                if (postRoundCallback != null) await postRoundCallback();
+            }
         }
     }
 }

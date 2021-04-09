@@ -12,6 +12,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using NBattleshipCodingContest.Logic;
 
 namespace BattleshipContestFunc
 {
@@ -81,7 +82,7 @@ namespace BattleshipContestFunc
             string? ApiKey,
             [property: Required][property: MinLength(1)] string PlayerName,
             [property: Required][property: MinLength(1)] string TournamentStartedLogRowKey,
-            int CompletedGameCount = 0,
+            [property: Required] IEnumerable<SinglePlayerGame> Games,
             int NumberOfShots = 0);
 
         private static readonly TimeSpan LeaseBuffer = TimeSpan.FromSeconds(20);
@@ -142,24 +143,25 @@ namespace BattleshipContestFunc
             player.TournamentInProgressSince = DateTime.UtcNow;
             await playerTable.Replace(player);
 
+            var games = gameClient.CreateTournamentGames(NumberOfGames);
             var message = new MeasurePlayerRequestMessage(playerId, leaseId, GetLeaseEnd(),
-                player.WebApiUrl, player.ApiKey, player.Name, startedEntry!.RowKey);
-            await messageSender.SendMessage(message, serviceBusConnectionString!, 
-                TopicName, TimeSpan.FromMinutes(1));
+                player.WebApiUrl, player.ApiKey, player.Name, startedEntry!.RowKey, games);
+            await messageSender.SendMessage(message, serviceBusConnectionString!, TopicName);
 
             return req.CreateResponse(HttpStatusCode.Accepted);
         }
 
         internal const int NumberOfGames = 25;
-        internal const int ParallelGames = 25;
+        internal const int ThrottleAfter = 15;
+        internal static readonly TimeSpan Delay = TimeSpan.FromSeconds(55);
 
         [Function("AsyncPlayGame")]
         public async Task AsyncGame(
-            [ServiceBusTrigger(TopicName, "MeasurePlayerSubscription")] string sbMessage,
+            [ServiceBusTrigger(TopicName, "MeasurePlayerSubscription")] byte[]? sbMessageBytes,
             FunctionContext context)
         {
             var logger = context.GetLogger<PlayersPlayApi>();
-            if (string.IsNullOrEmpty(sbMessage))
+            if (sbMessageBytes == null || sbMessageBytes.Length == 0)
             {
                 logger.LogCritical("Received empty message");
                 return;
@@ -168,41 +170,41 @@ namespace BattleshipContestFunc
             MeasurePlayerRequestMessage? message;
             try
             {
-                message = JsonSerializer.Deserialize<MeasurePlayerRequestMessage>(sbMessage, jsonOptions);
+                message = await messageSender.DecodeMessage<MeasurePlayerRequestMessage>(sbMessageBytes);
             }
             catch (JsonException ex)
             {
-                logger.LogCritical($"Cloud not parse message {sbMessage}: {ex.Message}");
+                logger.LogCritical($"Cloud not parse message: {ex.Message}");
                 return;
             }
 
             if (message == null)
             {
-                logger.LogCritical($"Message {sbMessage} empty after deserialization");
+                logger.LogCritical($"Message empty after deserialization");
                 return;
             }
 
             var validationError = ValidateModel(message);
             if (validationError != null)
             {
-                logger.LogCritical($"Message {sbMessage} invalid");
+                logger.LogCritical($"Message invalid");
                 return;
             }
 
             message = await RenewLease(message);
 
             var numberOfErrors = 0;
-            IEnumerable<int> numberOfShots;
             const int maxNumberOfErrors = 3;
             var gameLogEntry = await playerLogTable.Add(
-                new(message.PlayerId, message.WebApiUrl, $"Games {message.CompletedGameCount + 1}-{message.CompletedGameCount + ParallelGames}") { Started = DateTime.UtcNow });
+                new(message.PlayerId, message.WebApiUrl, $"Running shots {message.NumberOfShots + 1}-{message.NumberOfShots + ThrottleAfter}") { Started = DateTime.UtcNow });
             while (true)
             {
                 try
                 {
-                    numberOfShots = await gameClient.PlaySimultaneousGames(
+                    await gameClient.PlaySimultaneousGames(
                         message.WebApiUrl,
-                        ParallelGames,
+                        message.Games,
+                        ThrottleAfter,
                         async () => { message = await RenewLease(message); },
                         message.ApiKey);
                     break;
@@ -223,35 +225,24 @@ namespace BattleshipContestFunc
             }
 
             gameLogEntry!.Completed = DateTime.UtcNow;
-            gameLogEntry!.LogMessage = $"Games {message.CompletedGameCount + 1}-{message.CompletedGameCount + ParallelGames} ({numberOfShots.Sum()} shots)";
             await playerLogTable.Replace(gameLogEntry);
 
             message = message with
             {
-                CompletedGameCount = message.CompletedGameCount + ParallelGames,
-                NumberOfShots = message.NumberOfShots + numberOfShots.Sum()
+                NumberOfShots = message.NumberOfShots + ThrottleAfter
             };
 
-            if (message.CompletedGameCount == NumberOfGames)
+            if (!message.Games.Any(g => g.GetGameState(BattleshipBoard.Ships) == SinglePlayerGameState.InProgress))
             {
-                var avgShots = ((double)message.NumberOfShots) / NumberOfGames;
-                var playerResultEntry = await playerResultTable.GetSingle(message.PlayerId);
-                if (playerResultEntry == null)
-                {
-                    playerResultEntry = new(message.PlayerId)
-                    {
-                        Name = message.PlayerName
-                    };
-                }
+                var totalNumberOfShots = message.Games.Sum(g => g.Log.Count());
+                var avgShots = ((double)totalNumberOfShots) / NumberOfGames;
 
-                playerResultEntry.LastMeasurement = DateTime.UtcNow;
-                playerResultEntry.AvgNumberOfShots = avgShots;
-                await playerResultTable.Replace(playerResultEntry);
+                await playerResultTable.AddOrUpdate(message.PlayerId, message.PlayerName, DateTime.UtcNow, avgShots);
 
                 var logEntry = await playerLogTable.GetSingle(message.PlayerId, message.TournamentStartedLogRowKey);
                 if (logEntry != null)
                 {
-                    logEntry.LogMessage = $"Finished tournament with total # of shots {message.NumberOfShots}, avg # of shots {avgShots}";
+                    logEntry.LogMessage = $"Finished tournament with total # of shots {totalNumberOfShots}, avg # of shots {avgShots}";
                     logEntry.Completed = DateTime.UtcNow;
                     await playerLogTable.Replace(logEntry);
                 }
@@ -268,8 +259,7 @@ namespace BattleshipContestFunc
             }
 
             message = await RenewLease(message, true);
-            await messageSender.SendMessage(message, serviceBusConnectionString!,
-                TopicName, TimeSpan.FromMinutes(1));
+            await messageSender.SendMessage(message, serviceBusConnectionString!, TopicName, Delay);
         }
     }
 }
