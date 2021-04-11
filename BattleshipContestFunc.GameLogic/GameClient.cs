@@ -38,7 +38,7 @@ namespace BattleshipContestFunc
             var game = gameFactory.Create(0);
             ShootSomeRandomShots(game);
 
-            await playerClient.GetShot(playerWebApiUrl, game, apiKey);
+            await playerClient.GetShots(playerWebApiUrl, new[] { game }, apiKey);
         }
 
         public async Task<int> PlayGame(string playerWebApiUrl, Func<Task>? postRoundCallback = null, string? apiKey = null)

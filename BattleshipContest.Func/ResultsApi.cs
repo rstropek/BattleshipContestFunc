@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -37,6 +38,7 @@ namespace BattleshipContestFunc
 
             // Get and return all players of current user 
             var results = mapper.Map<List<PlayerResult>, List<ResultsGetDto>>(await playerResultTable.Get());
+            results = results.OrderBy(r => r.AvgNumberOfShots).ToList();
             return await CreateResponse(req, results);
         }
     }

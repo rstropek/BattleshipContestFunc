@@ -24,8 +24,8 @@ namespace BattleshipContestFunc.Tests
             gameFactoryMock.Setup(m => m.Create(It.IsAny<int>())).Returns(gameMock.Object);
 
             var playerClientMock = new Mock<IPlayerClient>();
-            playerClientMock.Setup(m => m.GetShot("https://someserver.com/api/", gameMock.Object, "key"))
-                .ReturnsAsync(new BoardIndex());
+            playerClientMock.Setup(m => m.GetShots("https://someserver.com/api/", new[] { gameMock.Object }, "key"))
+                .ReturnsAsync(new[] { new BoardIndex() });
 
             var gameClient = new GameClient(playerClientMock.Object, gameFactoryMock.Object);
             await gameClient.PlaySingleMoveInRandomGame("https://someserver.com/api/", "key");
