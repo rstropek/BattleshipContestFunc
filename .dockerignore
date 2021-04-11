@@ -1,0 +1,7 @@
+*/**/bin
+*/**/nupkg
+*/**/obj
+TestResults
+.github
+.vs
+requests.http
