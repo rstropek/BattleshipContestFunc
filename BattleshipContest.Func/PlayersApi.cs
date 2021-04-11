@@ -22,6 +22,7 @@ namespace BattleshipContestFunc
         bool NeedsThrottling,
         DateTime? LastMeasurement,
         double? AvgNumberOfShots,
+        double? StdDev,
         string? GitHubUrl,
         DateTime? TournamentInProgressSince);
     public record PlayerPatchDto(
@@ -83,7 +84,8 @@ namespace BattleshipContestFunc
                     return p with
                     {
                         LastMeasurement = result.LastMeasurement,
-                        AvgNumberOfShots = result.AvgNumberOfShots
+                        AvgNumberOfShots = result.AvgNumberOfShots,
+                        StdDev = result.StdDev
                     };
                 }
 

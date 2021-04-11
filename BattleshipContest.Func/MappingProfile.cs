@@ -16,6 +16,7 @@ namespace BattleshipContestFunc
                 .ForCtorParam(nameof(PlayerGetDto.HasApiKey), opt => opt.MapFrom(src => !string.IsNullOrEmpty(src.ApiKey)))
                 .ForCtorParam(nameof(PlayerGetDto.LastMeasurement), opt => opt.MapFrom<string?>(_ => null))
                 .ForCtorParam(nameof(PlayerGetDto.AvgNumberOfShots), opt => opt.MapFrom<double?>(_ => null))
+                .ForCtorParam(nameof(PlayerGetDto.StdDev), opt => opt.MapFrom<double?>(_ => null))
                 .ForCtorParam(nameof(PlayerGetDto.NeedsThrottling), opt => opt.MapFrom(src => src.NeedsThrottling ?? false));
             CreateMap<PlayerAddDto, Player>()
                 .ForMember(p => p.RowKey, opt => opt.MapFrom(src => src.Id.ToString()))

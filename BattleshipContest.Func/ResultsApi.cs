@@ -15,7 +15,8 @@ namespace BattleshipContestFunc
         Guid Id, 
         string Name, 
         DateTime? LastMeasurement,
-        double? AvgNumberOfShots);
+        double? AvgNumberOfShots,
+        double? StdDev);
 
     public partial class ResultsApi : ApiBase
     {
