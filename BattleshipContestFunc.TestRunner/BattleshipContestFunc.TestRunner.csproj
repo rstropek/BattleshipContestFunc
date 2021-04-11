@@ -1,12 +1,47 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net5.0</TargetFramework>
+        <LangVersion>preview</LangVersion>
+        <Nullable>enable</Nullable>
+        <AnalysisLevel>preview</AnalysisLevel>
+        
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>bscc</ToolCommandName>
+        <PackageOutputPath>./nupkg</PackageOutputPath>
 
-  <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.8.0" />
-  </ItemGroup>
+        <PackageId>NBattleshipCodingContest.Runner</PackageId>
+        <Version>0.1.0-alpha</Version>
+        <Authors>Rainer Stropek</Authors>
+        <Company>Coding Club Linz</Company>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/rstropek/BattleshipContestFunc</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/rstropek/BattleshipContestFunc</RepositoryUrl>
+        <RepositoryType>GitHub</RepositoryType>
+
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+
+        <Description>Test runner for player for Battleship Coding Contest.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="CommandLineParser" Version="2.8.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="5.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="5.0.0" />
+        <PackageReference Include="Serilog" Version="2.10.0" />
+        <PackageReference Include="Serilog.Settings.Configuration" Version="3.1.0" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="3.1.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\BattleshipContestFunc.GameLogic\BattleshipContestFunc.GameLogic.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="appsettings.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
 
 </Project>

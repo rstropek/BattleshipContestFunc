@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "BattleshipContestFunc.TestRunner": {
+      "commandName": "Project",
+      "commandLineArgs": "run"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+name: Build and publish test runner
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'BattleshipContestFunc.TestRunner/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CONFIG: Release
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+    steps:
+      - uses: actions/checkout@v2
+        name: 🚚 Checkout
+
+      - uses: actions/setup-dotnet@v1
+        name: 🔧 Setup .NET
+        with:
+          dotnet-version: '5.0.x'
+
+      - name: 👩‍🏭 Restore
+        run: dotnet restore
+        working-directory: BattleshipContestFunc.TestRunner
+
+      - name: 👩‍🏭 Build
+        run: dotnet build --no-restore --configuration $CONFIG
+        working-directory: BattleshipContestFunc.TestRunner
+
+      - name: 📦 Pack
+        working-directory: BattleshipContestFunc.TestRunner
+        run: dotnet pack --no-build --no-restore --configuration $CONFIG
+
+      - name: 📢 Publish on NuGet
+        working-directory: BattleshipContestFunc.TestRunner
+        run: find ./bin/Release -name '*.nupkg' | xargs -i dotnet nuget push {} --api-key $NUGET_API_KEY --source https://api.nuget.org/v3/index.json
