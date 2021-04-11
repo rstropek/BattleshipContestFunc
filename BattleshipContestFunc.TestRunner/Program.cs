@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using NBattleshipCodingContest.Logic;
 using Serilog;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -26,10 +27,11 @@ namespace BattleshipContestFunc.TestRunner
                   errors => 1);
         }
 
-        private static GameConfiguration GetGameConfiguration()
+        private static GameConfiguration GetGameConfiguration(IEnumerable<KeyValuePair<string, string>> settings)
         {
             var playerClientFactory = new PlayerHttpClientFactory();
             var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(settings)
                 .AddJsonFile(Path.Combine(Environment.CurrentDirectory, "appsettings.json"), true, false)
                 .AddEnvironmentVariables()
                 .Build();
@@ -39,7 +41,8 @@ namespace BattleshipContestFunc.TestRunner
             };
 
             var logger = new LoggerConfiguration()
-                .ReadFrom.Configuration(configuration)
+                .MinimumLevel.Information()
+                .WriteTo.Console()
                 .CreateLogger();
 
             var gameFactory = new SinglePlayerGameFactory(new RandomBoardFiller());
@@ -49,7 +52,13 @@ namespace BattleshipContestFunc.TestRunner
 
         private static int TestPlayer(TestPlayerOptions options)
         {
-            var (playerClientFactory, _, configuration, jsonOptions, logger) = GetGameConfiguration();
+            var (playerClientFactory, _, configuration, jsonOptions, logger) = 
+                GetGameConfiguration(new KeyValuePair<string, string>[]
+                {
+                    new("Timeouts:getReady", options.Timeout.ToString()),
+                    new("Timeouts:getShot", "3000"),
+                    new("Timeouts:getShots", "3000"),
+                });
 
             var playerClient = new PlayerClient(playerClientFactory, configuration, jsonOptions);
             try
@@ -69,7 +78,13 @@ namespace BattleshipContestFunc.TestRunner
 
         private static int RunTournament(RunTournamentOptions options)
         {
-            var (playerClientFactory, gameFactory, configuration, jsonOptions, logger) = GetGameConfiguration();
+            var (playerClientFactory, gameFactory, configuration, jsonOptions, logger) = 
+                GetGameConfiguration(new KeyValuePair<string, string>[]
+                {
+                    new("Timeouts:getReady", options.GetReadyTimeout.ToString()),
+                    new("Timeouts:getShot", options.GetShotsTimeout.ToString()),
+                    new("Timeouts:getShots", options.GetShotsTimeout.ToString()),
+                });
 
             var playerClient = new PlayerClient(playerClientFactory, configuration, jsonOptions);
             var gameClient = new GameClient(playerClient, gameFactory);
