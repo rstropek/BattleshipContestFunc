@@ -26,7 +26,7 @@ namespace BattleshipContestFunc.Data.Tests
             var result = new PlayerResult(playerId) { Name = "dummy", LastMeasurement = DateTime.UtcNow, AvgNumberOfShots = 1d };
             await prt.Add(result);
 
-            await prt.AddOrUpdate(playerId, "FooBar", DateTime.UtcNow, 2d);
+            await prt.AddOrUpdate(playerId, "FooBar", DateTime.UtcNow, 2d, 1d);
 
             Assert.Equal("FooBar", (await prt.GetSingle(playerId))!.Name);
 
@@ -40,7 +40,7 @@ namespace BattleshipContestFunc.Data.Tests
             var prt = new PlayerResultTable(Mock.Of<ILogger<RepositoryTable<PlayerResult, string, Guid>>>(), tableFixture.Repository);
 
             var playerId = Guid.NewGuid();
-            await prt.AddOrUpdate(playerId, "FooBar", DateTime.UtcNow, 2d);
+            await prt.AddOrUpdate(playerId, "FooBar", DateTime.UtcNow, 2d, 1d);
 
             Assert.Equal("FooBar", (await prt.GetSingle(playerId))!.Name);
 

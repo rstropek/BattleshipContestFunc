@@ -6,7 +6,7 @@ namespace BattleshipContestFunc.Data
 {
     public interface IPlayerResultTable : IRepositoryTable<PlayerResult, string, Guid>
     {
-        Task AddOrUpdate(Guid playerId, string playerName, DateTime lastMeasurement, double avgShots);
+        Task AddOrUpdate(Guid playerId, string playerName, DateTime lastMeasurement, double avgShots, double stdDev);
     }
 
     public class PlayerResultTable : RepositoryTable<PlayerResult, string, Guid>, IPlayerResultTable
@@ -16,7 +16,7 @@ namespace BattleshipContestFunc.Data
         {
         }
 
-        public async Task AddOrUpdate(Guid playerId, string playerName, DateTime lastMeasurement, double avgShots)
+        public async Task AddOrUpdate(Guid playerId, string playerName, DateTime lastMeasurement, double avgShots, double stdDev)
         {
             var insert = false;
             var playerResultEntry = await GetSingle(playerId);
@@ -28,6 +28,7 @@ namespace BattleshipContestFunc.Data
 
             playerResultEntry.LastMeasurement = lastMeasurement;
             playerResultEntry.AvgNumberOfShots = avgShots;
+            playerResultEntry.StdDev = stdDev;
             playerResultEntry.Name = playerName;
             if (insert) await Add(playerResultEntry);
             else await Replace(playerResultEntry);

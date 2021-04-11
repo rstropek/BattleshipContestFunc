@@ -20,5 +20,7 @@ namespace BattleshipContestFunc.Data
         public DateTime LastMeasurement { get; set; }
 
         public double AvgNumberOfShots { get; set; }
+
+        public double StdDev { get; set; }
     }
 }

@@ -11,7 +11,7 @@ namespace BattleshipContestFunc
 
         Task<int> PlayGame(string playerWebApiUrl, Func<Task>? postRoundCallback = null, string? apiKey = null);
 
-        IEnumerable<SinglePlayerGame> CreateTournamentGames(int numberOfGames);
+        IReadOnlyList<SinglePlayerGame> CreateTournamentGames(int numberOfGames);
 
         Task PlaySimultaneousGames(string playerWebApiUrl, IEnumerable<SinglePlayerGame> games,
             int maximumShots, Func<Task>? postRoundCallback = null, string? apiKey = null, int[] ? ships = null);

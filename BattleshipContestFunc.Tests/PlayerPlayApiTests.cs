@@ -423,7 +423,7 @@ namespace BattleshipContestFunc.Tests
             logTableMock.Setup(m => m.Replace(It.IsAny<PlayerLog>())).ReturnsAsync(new PlayerLog(Guid.Empty));
 
             var resultTableMock = new Mock<IPlayerResultTable>();
-            resultTableMock.Setup(m => m.AddOrUpdate(Guid.Empty, It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<double>()))
+            resultTableMock.Setup(m => m.AddOrUpdate(Guid.Empty, It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<double>(), It.IsAny<double>()))
                 .Returns(Task.CompletedTask);
             //resultTableMock.Setup(m => m.Replace(It.Is<PlayerResult>(pr => pr.AvgNumberOfShots == 42d * PlayersPlayApi.ParallelGames / PlayersPlayApi.NumberOfGames)))
             //    .ReturnsAsync(new PlayerResult(Guid.Empty));

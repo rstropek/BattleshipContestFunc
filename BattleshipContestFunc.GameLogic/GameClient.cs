@@ -54,12 +54,12 @@ namespace BattleshipContestFunc
             return game.NumberOfShots;
         }
 
-        public IEnumerable<SinglePlayerGame> CreateTournamentGames(int numberOfGames)
+        public IReadOnlyList<SinglePlayerGame> CreateTournamentGames(int numberOfGames)
         {
-            var result = new SinglePlayerGame[numberOfGames];
+            var result = new List<SinglePlayerGame>(numberOfGames);
             for (var i = 0; i < numberOfGames; i++)
             {
-                result[i] = (SinglePlayerGame)gameFactory.Create(0);
+                result.Add((SinglePlayerGame)gameFactory.Create(0));
             }
 
             return result;

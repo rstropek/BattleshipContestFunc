@@ -82,7 +82,7 @@ namespace BattleshipContestFunc
             string? ApiKey,
             [property: Required][property: MinLength(1)] string PlayerName,
             [property: Required][property: MinLength(1)] string TournamentStartedLogRowKey,
-            [property: Required] IEnumerable<SinglePlayerGame> Games,
+            [property: Required] IReadOnlyList<SinglePlayerGame> Games,
             int NumberOfShots = 0,
             bool NeedsThrottling = false);
 
@@ -236,15 +236,14 @@ namespace BattleshipContestFunc
 
             if (!message.Games.Any(g => g.GetGameState(BattleshipBoard.Ships) == SinglePlayerGameState.InProgress))
             {
-                var totalNumberOfShots = message.Games.Sum(g => g.Log.Count());
-                var avgShots = ((double)totalNumberOfShots) / NumberOfGames;
+                var (avgShots, stdDev) = message.Games.Analyze();
 
-                await playerResultTable.AddOrUpdate(message.PlayerId, message.PlayerName, DateTime.UtcNow, avgShots);
+                await playerResultTable.AddOrUpdate(message.PlayerId, message.PlayerName, DateTime.UtcNow, avgShots, stdDev);
 
                 var logEntry = await playerLogTable.GetSingle(message.PlayerId, message.TournamentStartedLogRowKey);
                 if (logEntry != null)
                 {
-                    logEntry.LogMessage = $"Finished tournament with total # of shots {totalNumberOfShots}, avg # of shots {avgShots}";
+                    logEntry.LogMessage = $"Finished tournament with avg # of shots {avgShots} and std dev of {stdDev}";
                     logEntry.Completed = DateTime.UtcNow;
                     await playerLogTable.Replace(logEntry);
                 }
