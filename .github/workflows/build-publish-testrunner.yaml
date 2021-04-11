@@ -37,4 +37,4 @@ jobs:
 
       - name: 📢 Publish on NuGet
         working-directory: BattleshipContestFunc.TestRunner
-        run: find ./bin/Release -name '*.nupkg' | xargs -i dotnet nuget push {} --api-key $NUGET_API_KEY --source https://api.nuget.org/v3/index.json
+        run: find ./nupkg -name '*.nupkg' | xargs -i dotnet nuget push {} --api-key $NUGET_API_KEY --source https://api.nuget.org/v3/index.json
