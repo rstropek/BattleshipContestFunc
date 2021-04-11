@@ -1,4 +1,5 @@
 using NBattleshipCodingContest.Logic;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
@@ -42,7 +43,7 @@ namespace BattleshipContestFunc.Tests
         {
             var shotRequests = new[]
             {
-                new ShotRequest(null, new BoardContent().ToShortString())
+                new ShotRequest(Guid.Empty, null, new BoardContent().ToShortString())
             };
             var mock = RequestResponseMocker.Create(JsonSerializer.Serialize(shotRequests, config.JsonOptions));
             var api = new Players.RandomPlayerApi(config.JsonOptions, config.Serializer);

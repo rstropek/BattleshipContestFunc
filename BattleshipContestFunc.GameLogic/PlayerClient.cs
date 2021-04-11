@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace BattleshipContestFunc
 {
-    public record ShotRequest(BoardIndex? LastShot, string Board);
+    public record ShotRequest(Guid GameId, BoardIndex? LastShot, string Board);
 
     public class PlayerClient : IPlayerClient
     {
@@ -51,7 +51,7 @@ namespace BattleshipContestFunc
             var client = httpClientFactory.GetHttpClient(playerWebApiUrl);
             var url = BuildPathWithKey("getShot", apiKey);
 
-            var shotRequest = new ShotRequest(game.LastShot, game.ShootingBoard.ToShortString());
+            var shotRequest = new ShotRequest(game.GameId, game.LastShot, game.ShootingBoard.ToShortString());
             var request = new HttpRequestMessage()
             {
                 Method = HttpMethod.Post,
@@ -75,7 +75,7 @@ namespace BattleshipContestFunc
             var client = httpClientFactory.GetHttpClient(playerWebApiUrl);
             var url = BuildPathWithKey("getShots", apiKey);
 
-            var shotRequests = games.Select(g => new ShotRequest(g.LastShot, g.ShootingBoard.ToShortString())).ToArray();
+            var shotRequests = games.Select(g => new ShotRequest(g.GameId, g.LastShot, g.ShootingBoard.ToShortString())).ToArray();
             var request = new HttpRequestMessage()
             {
                 Method = HttpMethod.Post,

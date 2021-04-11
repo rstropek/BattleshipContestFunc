@@ -81,22 +81,23 @@ namespace BattleshipContestFunc.Tests
         [Fact]
         public async Task PlaySimultaneousGamesMaximumShots()
         {
+            var gameId = Guid.NewGuid();
             var board = new BoardContent(SquareContent.Water);
             board["A1"] = board["C1"] = board["E1"] = SquareContent.Ship;
             var shootingBoard = new BoardContent(SquareContent.Unknown);
-            var game = new SinglePlayerGame(Guid.Empty, 0, board, shootingBoard);
+            var game = new SinglePlayerGame(gameId, 0, board, shootingBoard);
             var games = new[] { game };
 
             var playerClientMock = new Mock<IPlayerClient>();
             playerClientMock.Setup(m => m.GetShots("https://someserver.com/api/", 
-                It.Is<IEnumerable<ISinglePlayerGame>>(g => g.Count() == 1), "key"))
+                It.Is<IEnumerable<ISinglePlayerGame>>(g => g.Count() == 1 && g.First().GameId == gameId), "key"))
                 .ReturnsAsync(new[] { new BoardIndex() });
 
             var client = new GameClient(playerClientMock.Object, Mock.Of<ISinglePlayerGameFactory>());
             await client.PlaySimultaneousGames("https://someserver.com/api/", games, 2, null, "key", new[] { 1, 1, 1 });
 
             playerClientMock.Verify(m => m.GetShots("https://someserver.com/api/",
-                It.Is<IEnumerable<ISinglePlayerGame>>(g => g.Count() == 1), "key"), Times.Exactly(2));
+                It.Is<IEnumerable<ISinglePlayerGame>>(g => g.Count() == 1 && g.First().GameId == gameId), "key"), Times.Exactly(2));
         }
 
         [Fact]
