@@ -12,6 +12,6 @@ ENV HOME /home/bscc
 USER bscc
 WORKDIR /home/bscc
 COPY --from=Builder /runner/BattleshipContestFunc.TestRunner/nupkg/*.nupkg .
-RUN dotnet tool install --global --add-source . NBattleshipCodingContest.Runner --version 0.2.0-alpha
+RUN dotnet tool install --global --add-source . NBattleshipCodingContest.Runner --version 0.3.0-alpha
 ENTRYPOINT [ "/home/bscc/.dotnet/tools/bscc" ]
 CMD [ "--help" ]

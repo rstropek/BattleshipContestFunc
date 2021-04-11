@@ -12,7 +12,7 @@
         <PackageOutputPath>./nupkg</PackageOutputPath>
 
         <PackageId>NBattleshipCodingContest.Runner</PackageId>
-        <Version>0.2.0-alpha</Version>
+        <Version>0.3.0-alpha</Version>
         <Authors>Rainer Stropek</Authors>
         <Company>Coding Club Linz</Company>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
