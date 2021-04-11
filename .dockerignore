@@ -5,3 +5,7 @@ TestResults
 .github
 .vs
 requests.http
+BattleshipContestFunc.TestRunner/Dockerfile
+BattleshipContest.Func
+BattleshipContestFunc.Tests
+DevOps
