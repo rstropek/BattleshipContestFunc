@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using AutoMapper;
 using Azure.Core.Serialization;
 using BattleshipContestFunc.Data;
 using Microsoft.Azure.Functions.Worker;
@@ -16,19 +15,26 @@ namespace BattleshipContestFunc
         string Name, 
         DateTime? LastMeasurement,
         double? AvgNumberOfShots,
-        double? StdDev);
+        double? StdDev,
+        string? GitHubUrl,
+        string? UserNickName,
+        string? PublicTwitter,
+        string? PublicUrl);
 
     public partial class ResultsApi : ApiBase
     {
-        private readonly IMapper mapper;
         private readonly IPlayerResultTable playerResultTable;
+        private readonly IUsersTable usersTable;
+        private readonly IPlayerTable playerTable;
 
-        public ResultsApi(IMapper mapper, JsonSerializerOptions jsonOptions,
-            JsonObjectSerializer jsonSerializer, IPlayerResultTable playerResultTable)
+        public ResultsApi(JsonSerializerOptions jsonOptions,
+            JsonObjectSerializer jsonSerializer, IPlayerResultTable playerResultTable,
+            IUsersTable usersTable, IPlayerTable playerTable)
             : base(jsonOptions, jsonSerializer)
         {
-            this.mapper = mapper;
             this.playerResultTable = playerResultTable;
+            this.usersTable = usersTable;
+            this.playerTable = playerTable;
         }
 
         [Function("GetResults")]
@@ -37,10 +43,22 @@ namespace BattleshipContestFunc
         {
             // Anonymous access is allowed
 
-            // Get and return all players of current user 
-            var results = mapper.Map<List<PlayerResult>, List<ResultsGetDto>>(await playerResultTable.Get());
-            results = results.OrderBy(r => r.AvgNumberOfShots).ToList();
-            return await CreateResponse(req, results);
+            // Get all players of current user 
+            var results = await playerResultTable.Get();
+
+            // Add data from player and user
+            var responseResult = new List<ResultsGetDto>(results.Count);
+            foreach(var item in results)
+            {
+                var player = await playerTable.GetSingle(Guid.Parse(item.RowKey));
+                var user = await usersTable.GetSingle(player!.Creator);
+                responseResult.Add(new(Guid.Parse(item.RowKey), item.Name,
+                    item.LastMeasurement, item.AvgNumberOfShots, item.StdDev,
+                    player?.GitHubUrl, user?.NickName, user?.PublicTwitter, user?.PublicUrl));
+            }
+
+            responseResult = responseResult.OrderBy(r => r.AvgNumberOfShots).ToList();
+            return await CreateResponse(req, responseResult);
         }
     }
 }

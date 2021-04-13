@@ -29,8 +29,6 @@ namespace BattleshipContestFunc
             CreateMap<User, UserGetDto>().ForCtorParam(nameof(UserGetDto.Subject), opt => opt.MapFrom(src => src.RowKey));
             CreateMap<UserGetDto, User>().ForCtorParam("subject", opt => opt.MapFrom(_ => string.Empty));
             CreateMap<UserRegisterDto, User>().ForMember(p => p.RowKey, opt => opt.MapFrom(_ => string.Empty));
-
-            CreateMap<PlayerResult, ResultsGetDto>().ForCtorParam(nameof(PlayerGetDto.Id), opt => opt.MapFrom(src => src.RowKey));
         }
     }
 }
