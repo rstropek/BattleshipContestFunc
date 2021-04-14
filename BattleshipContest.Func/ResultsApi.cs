@@ -51,6 +51,7 @@ namespace BattleshipContestFunc
             foreach(var item in results)
             {
                 var player = await playerTable.GetSingle(Guid.Parse(item.RowKey));
+                if (player == null) continue;
                 var user = await usersTable.GetSingle(player!.Creator);
                 responseResult.Add(new(Guid.Parse(item.RowKey), item.Name,
                     item.LastMeasurement, item.AvgNumberOfShots, item.StdDev,
