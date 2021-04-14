@@ -153,7 +153,7 @@ namespace BattleshipContestFunc
             return req.CreateResponse(HttpStatusCode.Accepted);
         }
 
-        internal const int NumberOfGames = 100;
+        internal const int NumberOfGames = 250;
         internal const int ThrottleAfter = 15;
         internal static readonly TimeSpan Delay = TimeSpan.FromSeconds(55);
 
