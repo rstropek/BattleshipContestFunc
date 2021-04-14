@@ -53,5 +53,29 @@ namespace BattleshipContestFunc.Players
             await response.WriteAsJsonAsync(requests.Select(_ => new BoardIndex(rand.Next(10), rand.Next(10))), jsonSerializer);
             return response;
         }
+
+        [Function("FinishedRandomPlayer")]
+        public async Task<HttpResponseData> Finished(
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "players/random/finished")] HttpRequestData req)
+        {
+            using var reader = new StreamReader(req.Body);
+            FinishedProtocolDto[]? requests;
+            try
+            {
+                var bodyContent = await reader.ReadToEndAsync();
+                requests = JsonSerializer.Deserialize<FinishedProtocolDto[]>(bodyContent, jsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                return await CreateValidationError(req, $"Could not parse request body ({ex.Message})");
+            }
+
+            if (requests == null)
+            {
+                return await CreateValidationError(req, $"Missing content in request body.");
+            }
+
+            return req.CreateResponse(HttpStatusCode.OK);
+        }
     }
 }

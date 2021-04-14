@@ -7,7 +7,7 @@ namespace BattleshipContestFunc
 {
     public interface IGameClient 
     {
-        Task GetReadyForGame(string playerWebApiUrl, string? apiKey = null);
+        Task GetReadyForGame(string playerWebApiUrl, int numberOfGames, string? apiKey = null);
 
         Task<int> PlayGame(string playerWebApiUrl, Func<Task>? postRoundCallback = null, string? apiKey = null);
 
@@ -17,5 +17,7 @@ namespace BattleshipContestFunc
             int maximumShots, Func<Task>? postRoundCallback = null, string? apiKey = null, int[] ? ships = null);
 
         Task PlaySingleMoveInRandomGame(string playerWebApiUrl, string? apiKey = null);
+
+        Task NotifyGameFinished(string playerWebApiUrl, IEnumerable<SinglePlayerGame> games, string? apiKey = null);
     }
 }

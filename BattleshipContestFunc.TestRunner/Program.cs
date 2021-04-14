@@ -58,13 +58,14 @@ namespace BattleshipContestFunc.TestRunner
                     new("Timeouts:getReady", options.Timeout.ToString()),
                     new("Timeouts:getShot", "3000"),
                     new("Timeouts:getShots", "3000"),
+                    new("Timeouts:finished", "3000"),
                 });
 
             var playerClient = new PlayerClient(playerClientFactory, configuration, jsonOptions);
             try
             {
                 logger.Information("Sending *getReady* to player");
-                playerClient.GetReady(options.WebApiUrl, options.ApiKey).Wait();
+                playerClient.GetReady(options.WebApiUrl, 1, options.ApiKey).Wait();
                 logger.Information("Successfully sent *getReady* to player");
                 return 0;
             }
@@ -84,6 +85,7 @@ namespace BattleshipContestFunc.TestRunner
                     new("Timeouts:getReady", options.GetReadyTimeout.ToString()),
                     new("Timeouts:getShot", options.GetShotsTimeout.ToString()),
                     new("Timeouts:getShots", options.GetShotsTimeout.ToString()),
+                    new("Timeouts:finished", "3000"),
                 });
 
             var playerClient = new PlayerClient(playerClientFactory, configuration, jsonOptions);
@@ -93,6 +95,17 @@ namespace BattleshipContestFunc.TestRunner
                 logger.Information("Starting tournament");
                 var games = gameClient.CreateTournamentGames(options.Games);
                 gameClient.PlaySimultaneousGames(options.WebApiUrl, games, 101, apiKey: options.ApiKey).Wait();
+
+                try
+                {
+                    gameClient.NotifyGameFinished(options.WebApiUrl, games, options.ApiKey).Wait();
+                }
+                catch (Exception ex)
+                {
+                    var errorMessage = $"Could not send 'Finished' message to player. Player probably does not implement it. That's is fine, it is optional.\n\n{ex.GetFullDescription()}";
+                    logger.Warning(errorMessage);
+                }
+
                 var stats = games.Analyze();
                 logger.Information("Successfully completed tournament. Avg. shots: {Avg}, std. dev.: {StdDev}",
                     stats.Average, stats.StdDev);

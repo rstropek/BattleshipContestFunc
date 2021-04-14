@@ -60,7 +60,7 @@ namespace BattleshipContestFunc
 
             try
             {
-                await gameClient.GetReadyForGame(player.WebApiUrl, player.ApiKey);
+                await gameClient.GetReadyForGame(player.WebApiUrl, 1, player.ApiKey);
                 await gameClient.PlaySingleMoveInRandomGame(player.WebApiUrl, player.ApiKey);
             }
             catch (Exception ex)
@@ -120,7 +120,7 @@ namespace BattleshipContestFunc
             try
             {
                 await playerLogTable.Add(new(playerId, player.WebApiUrl, $"Getting player ready for tournament"));
-                await gameClient.GetReadyForGame(player.WebApiUrl, player.ApiKey);
+                await gameClient.GetReadyForGame(player.WebApiUrl, NumberOfGames, player.ApiKey);
             }
             catch (Exception ex)
             {
@@ -236,6 +236,8 @@ namespace BattleshipContestFunc
 
             if (!message.Games.Any(g => g.GetGameState(BattleshipBoard.Ships) == SinglePlayerGameState.InProgress))
             {
+                await SendFinishedGamesNotification(message);
+
                 var (avgShots, stdDev) = message.Games.Analyze();
 
                 await playerResultTable.AddOrUpdate(message.PlayerId, message.PlayerName, DateTime.UtcNow, avgShots, stdDev);
@@ -262,6 +264,20 @@ namespace BattleshipContestFunc
             message = await RenewLease(message, true);
             await messageSender.SendMessage(message, serviceBusConnectionString!, TopicName, 
                 message.NeedsThrottling ? Delay : null);
+        }
+
+        private async Task SendFinishedGamesNotification(MeasurePlayerRequestMessage message)
+        {
+            try
+            {
+                await gameClient.NotifyGameFinished(message.WebApiUrl, message.Games, message.ApiKey);
+                await playerLogTable.Add(new(message.PlayerId, message.WebApiUrl, "Sent game finished message to player"));
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Could not send 'Finished' message to player. Player probably does not implement it. That's is fine, it is optional.\n\n{ex.GetFullDescription()}";
+                await playerLogTable.Add(new(message.PlayerId, message.WebApiUrl, errorMessage));
+            }
         }
     }
 }

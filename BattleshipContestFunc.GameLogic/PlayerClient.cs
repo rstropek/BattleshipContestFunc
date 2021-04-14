@@ -14,6 +14,8 @@ namespace BattleshipContestFunc
 {
     public record ShotRequest(Guid GameId, BoardIndex? LastShot, string Board);
 
+    public record FinishedProtocolDto(Guid GameId, string Board, int NumberOfShots);
+
     public class PlayerClient : IPlayerClient
     {
         private readonly IPlayerHttpClientFactory httpClientFactory;
@@ -21,6 +23,7 @@ namespace BattleshipContestFunc
         private static TimeSpan getReadyTimeout = TimeSpan.Zero;
         private static TimeSpan getShotTimeout = TimeSpan.Zero;
         private static TimeSpan getShotsTimeout = TimeSpan.Zero;
+        private static TimeSpan finishedTimeout = TimeSpan.Zero;
 
         public PlayerClient(IPlayerHttpClientFactory httpClientFactory, IConfiguration? configuration = null, JsonSerializerOptions? jsonOptions = null)
         {
@@ -31,19 +34,39 @@ namespace BattleshipContestFunc
                 if (getReadyTimeout == TimeSpan.Zero) getReadyTimeout = TimeSpan.FromMilliseconds(int.Parse(configuration["Timeouts:getReady"]));
                 if (getShotTimeout == TimeSpan.Zero) getShotTimeout = TimeSpan.FromMilliseconds(int.Parse(configuration["Timeouts:getShot"]));
                 if (getShotsTimeout == TimeSpan.Zero) getShotsTimeout = TimeSpan.FromMilliseconds(int.Parse(configuration["Timeouts:getShots"]));
+                if (finishedTimeout == TimeSpan.Zero) finishedTimeout = TimeSpan.FromMilliseconds(int.Parse(configuration["Timeouts:finished"]));
             }
         }
 
-        internal static string BuildPathWithKey(string path, string? apiKey)
+        internal static string BuildPathWithKey(string path, string? apiKey, params KeyValuePair<string, string>[] parameters)
         {
-            if (!string.IsNullOrEmpty(apiKey)) return path + $"?code={apiKey}";
-            return path;
+            var pathBuilder = new StringBuilder(path);
+            var first = true;
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                first = false;
+                pathBuilder.Append("?code=");
+                pathBuilder.Append(apiKey);
+            }
+
+            foreach(var p in parameters)
+            {
+                if (first) pathBuilder.Append('?');
+                else pathBuilder.Append('&');
+                pathBuilder.Append(p.Key);
+                pathBuilder.Append('=');
+                pathBuilder.Append(p.Value);
+            }
+
+            return pathBuilder.ToString();
         }
 
-        public async Task GetReady(string playerWebApiUrl, string? apiKey = null)
+        public async Task GetReady(string playerWebApiUrl, int numberOfGames, string? apiKey = null)
         {
             var client = httpClientFactory.GetHttpClient(playerWebApiUrl);
-            await client.GetAsync(BuildPathWithKey("getReady", apiKey), getReadyTimeout);
+            await client.GetAsync(BuildPathWithKey("getReady", apiKey,
+                new KeyValuePair<string, string>(nameof(numberOfGames), numberOfGames.ToString())), 
+                getReadyTimeout);
         }
 
         public async Task<BoardIndex> GetShot(string playerWebApiUrl, ISinglePlayerGame game, string? apiKey = null)
@@ -107,6 +130,21 @@ namespace BattleshipContestFunc
             {
                 throw new InvalidShotException(null, "Player returned invalid board index", ex);
             }
+        }
+        public async Task Finished(string playerWebApiUrl, IEnumerable<ISinglePlayerGame> games, string? apiKey = null)
+        {
+            var client = httpClientFactory.GetHttpClient(playerWebApiUrl);
+            var url = BuildPathWithKey("finished", apiKey);
+
+            var finishedProtocol = games.Select(g => new FinishedProtocolDto(g.GameId, g.ShootingBoard.ToShortString(), g.NumberOfShots)).ToArray();
+            var request = new HttpRequestMessage()
+            {
+                Method = HttpMethod.Post,
+                RequestUri = new Uri(url, UriKind.Relative)
+            };
+            request.Content = new StringContent(JsonSerializer.Serialize(finishedProtocol, jsonOptions), Encoding.UTF8, MediaTypeNames.Application.Json);
+
+            var response = await client.SendAsync(request, finishedTimeout);
         }
     }
 }

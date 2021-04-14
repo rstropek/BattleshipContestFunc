@@ -20,8 +20,8 @@ namespace BattleshipContestFunc
             this.gameFactory = gameFactory;
         }
 
-        public async Task GetReadyForGame(string playerWebApiUrl, string? apiKey = null)
-            => await playerClient.GetReady(playerWebApiUrl, apiKey);
+        public async Task GetReadyForGame(string playerWebApiUrl, int numberOfGames, string? apiKey = null)
+            => await playerClient.GetReady(playerWebApiUrl, numberOfGames, apiKey);
 
         public async Task PlaySingleMoveInRandomGame(string playerWebApiUrl, string? apiKey = null)
         {
@@ -82,5 +82,7 @@ namespace BattleshipContestFunc
                 if (postRoundCallback != null) await postRoundCallback();
             }
         }
+        public async Task NotifyGameFinished(string playerWebApiUrl, IEnumerable<SinglePlayerGame> games, string? apiKey = null)
+            => await playerClient.Finished(playerWebApiUrl, games, apiKey);
     }
 }

@@ -101,6 +101,18 @@ namespace BattleshipContestFunc.Tests
         }
 
         [Fact]
+        public async Task GetReady()
+        {
+            var playerClientMock = new Mock<IPlayerClient>();
+            playerClientMock.Setup(m => m.GetReady("https://someserver.com/api/", 42, "key"));
+
+            var client = new GameClient(playerClientMock.Object, Mock.Of<ISinglePlayerGameFactory>());
+            await client.GetReadyForGame("https://someserver.com/api/", 42, "key");
+
+            playerClientMock.VerifyAll();
+        }
+
+        [Fact]
         public async Task PlaySimultaneousGamesStopsAtWin()
         {
             var board = new BoardContent(SquareContent.Water);

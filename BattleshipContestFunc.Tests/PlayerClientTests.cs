@@ -28,21 +28,41 @@ namespace BattleshipContestFunc.Tests
         }
 
         [Fact]
+        public void BuildPathWithKeyAndParameters()
+        {
+            Assert.Equal("a/b?code=key&foo=bar", PlayerClient.BuildPathWithKey("a/b", "key", new KeyValuePair<string, string>[] { new("foo", "bar") }));
+        }
+
+        [Fact]
+        public void BuildPathWithoutKeyAndParameters()
+        {
+            Assert.Equal("a/b?foo=bar", PlayerClient.BuildPathWithKey("a/b", null, new KeyValuePair<string, string>[] { new("foo", "bar") }));
+        }
+
+        [Fact]
+        public void BuildPathWithKeyAndMultipleParameters()
+        {
+            Assert.Equal("a/b?code=key&foo=bar&x=y", PlayerClient.BuildPathWithKey("a/b", "key", 
+                new KeyValuePair<string, string>[] { new("foo", "bar"), new("x", "y") }));
+        }
+
+        [Fact]
         public async Task GetReady()
         {
             var clientMock = new Mock<IPlayerHttpClient>();
-            clientMock.Setup(m => m.GetAsync("getReady?code=key", TimeSpan.FromMilliseconds(2345)));
+            clientMock.Setup(m => m.GetAsync("getReady?code=key&numberOfGames=42", TimeSpan.FromMilliseconds(2345)));
 
             var configMock = new Mock<IConfiguration>();
             configMock.Setup(m => m["Timeouts:getReady"]).Returns("2345");
             configMock.Setup(m => m["Timeouts:getShot"]).Returns("1234");
             configMock.Setup(m => m["Timeouts:getShots"]).Returns("3456");
+            configMock.Setup(m => m["Timeouts:finished"]).Returns("3456");
 
             var factoryMock = new Mock<IPlayerHttpClientFactory>();
             factoryMock.Setup(m => m.GetHttpClient("https://someApi.com")).Returns(clientMock.Object);
 
             var client = new PlayerClient(factoryMock.Object, configMock.Object);
-            await client.GetReady("https://someApi.com", "key");
+            await client.GetReady("https://someApi.com", 42, "key");
 
             factoryMock.VerifyAll();
         }
@@ -61,6 +81,7 @@ namespace BattleshipContestFunc.Tests
             configMock.Setup(m => m["Timeouts:getReady"]).Returns("2345");
             configMock.Setup(m => m["Timeouts:getShot"]).Returns("1234");
             configMock.Setup(m => m["Timeouts:getShots"]).Returns("3456");
+            configMock.Setup(m => m["Timeouts:finished"]).Returns("3456");
 
             Expression<Func<HttpRequestMessage, bool>> check = message =>
                 message.RequestUri!.ToString() == "getShot?code=key"

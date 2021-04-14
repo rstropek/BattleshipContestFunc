@@ -8,7 +8,6 @@ using NBattleshipCodingContest.Logic;
 using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -73,7 +72,7 @@ namespace BattleshipContestFunc.Tests
         public async Task TestGetsReadyAndPlays()
         {
             var gameClientMock = new Mock<IGameClient>();
-            gameClientMock.Setup(m => m.GetReadyForGame(It.IsAny<string>(), It.IsAny<string>()))
+            gameClientMock.Setup(m => m.GetReadyForGame(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
             gameClientMock.Setup(m => m.PlaySingleMoveInRandomGame(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
@@ -107,7 +106,7 @@ namespace BattleshipContestFunc.Tests
         public async Task TestDependencyErrorOnException()
         {
             var gameClientMock = new Mock<IGameClient>();
-            gameClientMock.Setup(m => m.GetReadyForGame(It.IsAny<string>(), It.IsAny<string>()))
+            gameClientMock.Setup(m => m.GetReadyForGame(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
                 .ThrowsAsync(new ApplicationException("Dummy Error"));
 
             var playerMock = CreatePlayerTable();
@@ -157,7 +156,7 @@ namespace BattleshipContestFunc.Tests
         public async Task PlayDependencyErrorOnException()
         {
             var gameClientMock = new Mock<IGameClient>();
-            gameClientMock.Setup(m => m.GetReadyForGame(It.IsAny<string>(), It.IsAny<string>()))
+            gameClientMock.Setup(m => m.GetReadyForGame(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
                 .ThrowsAsync(new ApplicationException("Dummy Error"));
 
             var playerMock = CreatePlayerTable();
@@ -409,14 +408,19 @@ namespace BattleshipContestFunc.Tests
             VerifySendMessageNotCalled(senderMock);
         }
 
-        [Fact]
-        public async Task AsyncGameWritesResult()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task AsyncGameWritesResult(bool notifyFinishedThrows)
         {
             CreateFunctionContextMock(out var _, out var contextMock, out var senderMock);
 
             var gameClientMock = new Mock<IGameClient>();
             gameClientMock.Setup(m => m.PlaySimultaneousGames(It.IsAny<string>(), It.IsAny<IEnumerable<SinglePlayerGame>>(), 
                 It.IsAny<int>(), It.IsAny<Func<Task>>(), It.IsAny<string>(), null));
+            var notifyGameFinishedMock = gameClientMock.Setup(m => m.NotifyGameFinished(It.IsAny<string>(), It.IsAny<IEnumerable<SinglePlayerGame>>(),
+                It.IsAny<string>()));
+            if (notifyFinishedThrows) notifyGameFinishedMock.ThrowsAsync(new Exception());
 
             var logTableMock = new Mock<IPlayerLogTable>();
             logTableMock.Setup(m => m.Add(It.IsAny<PlayerLog>())).ReturnsAsync(new PlayerLog(Guid.Empty));
